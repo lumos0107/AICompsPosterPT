@@ -1,0 +1,188 @@
+From b9570853007e85fcfb5cc3a4f99d34f7f6bc634b Mon Sep 17 00:00:00 2001
+From: lumos0107 <codinghallabong@gmail.com>
+Date: Tue, 10 Nov 2026 23:29:45 +0900
+Subject: [PATCH 11/11] =?UTF-8?q?=EC=9D=B4=EB=A6=84=20=EC=9E=88=EB=8A=94?=
+ =?UTF-8?q?=20=EC=84=B1=EC=A7=88=20=EC=84=A0=ED=98=B8=20=EC=B6=94=EA=B0=80?=
+ =?UTF-8?q?(=EB=B3=B4=EB=8F=84=C2=B7=EB=85=B9=EC=A7=80=C2=B7=EC=A1=B0?=
+ =?UTF-8?q?=EC=9A=A9=ED=95=9C=20=EA=B8=B8=20=EB=93=B1,=20=EB=85=B8?=
+ =?UTF-8?q?=EB=93=9C=20=EC=86=8D=EC=84=B1=20=EC=97=B4=20=EC=9D=B4=EB=A6=84?=
+ =?UTF-8?q?=EC=9C=BC=EB=A1=9C=20=EC=A7=80=EC=A0=95)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- Preference.withFlags(Map), lackingTerm: 성질 없는 끝점 비율 × 길이 × α
+- NodeAttributes가 6번째 열부터 0/1 성질 열을 이름으로 읽음
+- 요청 값 alphaFlags (예: {"sidewalk": 3})
+- 테스트 1개
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../algorithm/loopv2/LoopV2Engine.java        | 13 +++++++++++-
+ .../algorithm/loopv2/NodeAttributes.java      | 13 ++++++++++++
+ .../algorithm/loopv2/Preference.java          | 20 +++++++++++++++++--
+ .../dto/RouteRecommendRequest.java            |  2 ++
+ .../application/service/RouteService.java     |  4 ++--
+ .../algorithm/loopv2/PreferenceTest.java      | 10 ++++++++++
+ 6 files changed, 57 insertions(+), 5 deletions(-)
+
+diff --git a/src/main/java/com/gildongmu/algorithm/loopv2/LoopV2Engine.java b/src/main/java/com/gildongmu/algorithm/loopv2/LoopV2Engine.java
+index 3b6d911..32376f6 100644
+--- a/src/main/java/com/gildongmu/algorithm/loopv2/LoopV2Engine.java
++++ b/src/main/java/com/gildongmu/algorithm/loopv2/LoopV2Engine.java
+@@ -205,7 +205,18 @@ public class LoopV2Engine {
+         double ev = v.getElevationMeters() == null ? eu : v.getElevationMeters();
+         return pref.edgeCost(len, eu, ev, attrs.facilityMeters(u.getPointId()), attrs.facilityMeters(v.getPointId()),
+             attrs.isSignal(v.getPointId()), attrs.isLit(u.getPointId()), attrs.isLit(v.getPointId()),
+-            attrs.waterMeters(u.getPointId()), attrs.waterMeters(v.getPointId()));
++            attrs.waterMeters(u.getPointId()), attrs.waterMeters(v.getPointId()))
++            + flagCost(u, v, len, pref);
++    }
++
++    /** 이름 있는 성질 선호의 비용: Σ_f α_f · ℓ · (성질 없는 끝점 비율). */
++    private double flagCost(JejuRoadPoint u, JejuRoadPoint v, double len, Preference pref) {
++        double c = 0.0;
++        for (Map.Entry<String, Double> f : pref.flagAlpha().entrySet()) {
++            if (f.getValue() == 0.0) continue;
++            c += f.getValue() * len * Preference.lackingTerm(attrs.has(f.getKey(), u.getPointId()), attrs.has(f.getKey(), v.getPointId()));
++        }
++        return c;
+     }
+ 
+     /** 방문 목록 끝에서부터 경로 길이 limit(m) 안에 드는 점의 개수(현재 노드 포함). */
+diff --git a/src/main/java/com/gildongmu/algorithm/loopv2/NodeAttributes.java b/src/main/java/com/gildongmu/algorithm/loopv2/NodeAttributes.java
+index 95e854b..43626f7 100644
+--- a/src/main/java/com/gildongmu/algorithm/loopv2/NodeAttributes.java
++++ b/src/main/java/com/gildongmu/algorithm/loopv2/NodeAttributes.java
+@@ -32,6 +32,8 @@ public class NodeAttributes {
+     // 2026-11-10 밤 추가(선택 열): lit(25 m 안 조명 0/1), water_m(해안·하천까지 m). 열이 없으면 조명 있음·물가로 보아 비용 0.
+     private final Set<Integer> dark = new HashSet<>();
+     private final Map<Integer, Double> water = new HashMap<>();
++    // 6번째 열부터(선택): 이름 있는 0/1 성질(예: sidewalk, green, quiet). 값이 0인 노드만 모아 둔다. 열이 없으면 모두 1로 본다.
++    private final Map<String, Set<Integer>> lacking = new HashMap<>();
+     private final boolean loaded;
+ 
+     @Autowired   // 테스트용 생성자가 따로 있어 Spring이 쓸 생성자를 지정
+@@ -71,9 +73,17 @@ public class NodeAttributes {
+         return water.getOrDefault(pointId, 0.0);
+     }
+ 
++    /** 이름 있는 성질(sidewalk, green, quiet 등)을 노드가 가지면 true. 그런 열이 없으면 true. */
++    public boolean has(String flag, int pointId) {
++        Set<Integer> s = lacking.get(flag);
++        return s == null || !s.contains(pointId);
++    }
++
+     private void read(Path p) {
+         try {
+             List<String> lines = Files.readAllLines(p, StandardCharsets.UTF_8);
++            String[] head = lines.isEmpty() ? new String[0] : lines.get(0).strip().split(",");
++            for (int c = 5; c < head.length; c++) lacking.put(head[c].strip(), new HashSet<>());
+             for (int i = 1; i < lines.size(); i++) {
+                 String t = lines.get(i).strip();
+                 if (t.isEmpty()) continue;
+@@ -83,6 +93,9 @@ public class NodeAttributes {
+                 facility.put(id, Double.parseDouble(v[2].strip()));
+                 if (v.length > 3 && "0".equals(v[3].strip())) dark.add(id);
+                 if (v.length > 4) water.put(id, Double.parseDouble(v[4].strip()));
++                for (int c = 5; c < Math.min(v.length, head.length); c++) {
++                    if ("0".equals(v[c].strip())) lacking.get(head[c].strip()).add(id);
++                }
+             }
+         } catch (IOException e) {
+             throw new UncheckedIOException("노드 속성 파일을 읽지 못함: " + p, e);
+diff --git a/src/main/java/com/gildongmu/algorithm/loopv2/Preference.java b/src/main/java/com/gildongmu/algorithm/loopv2/Preference.java
+index 844e9e9..d9a96cb 100644
+--- a/src/main/java/com/gildongmu/algorithm/loopv2/Preference.java
++++ b/src/main/java/com/gildongmu/algorithm/loopv2/Preference.java
+@@ -12,7 +12,8 @@ package com.gildongmu.algorithm.loopv2;
+ public record Preference(double alphaS, double alphaC, double alphaF,
+                          double tauPercent, double signalPassMeters, double facilityCapMeters,
+                          double lambdaP, double stepMeters, double reuseRecentMeters,
+-                         double alphaL, double alphaW, double waterNearMeters) {
++                         double alphaL, double alphaW, double waterNearMeters,
++                         java.util.Map<String, Double> flagAlpha) {
+ 
+     /** 경사 면제 임계값 τ(%) 확정값. */
+     public static final double TAU_PERCENT = 2.0;
+@@ -35,7 +36,22 @@ public record Preference(double alphaS, double alphaC, double alphaF,
+ 
+     public static Preference of(double alphaS, double alphaC, double alphaF, double alphaL, double alphaW) {
+         return new Preference(alphaS, alphaC, alphaF, TAU_PERCENT, SIGNAL_PASS_METERS, FACILITY_CAP_METERS,
+-            LAMBDA_P, STEP_METERS, REUSE_RECENT_METERS, alphaL, alphaW, WATER_NEAR_METERS);
++            LAMBDA_P, STEP_METERS, REUSE_RECENT_METERS, alphaL, alphaW, WATER_NEAR_METERS, java.util.Map.of());
++    }
++
++    /**
++     * 이름 있는 0/1 성질(예: sidewalk 보도, green 녹지, quiet 조용한 길)의 선호를 더한 사본(2026-11-10 밤).
++     * 성질이 없는 끝점 비율 × 길이 × α_f 를 비용에 더한다. 0이거나 빈 맵이면 기존과 같다.
++     */
++    public Preference withFlags(java.util.Map<String, Double> flags) {
++        return new Preference(alphaS, alphaC, alphaF, tauPercent, signalPassMeters, facilityCapMeters,
++            lambdaP, stepMeters, reuseRecentMeters, alphaL, alphaW, waterNearMeters,
++            flags == null ? java.util.Map.of() : java.util.Map.copyOf(flags));
++    }
++
++    /** 성질 항: 두 끝 노드 중 그 성질이 없는 비율(0, 0.5, 1). */
++    public static double lackingTerm(boolean hasU, boolean hasV) {
++        return ((hasU ? 0 : 1) + (hasV ? 0 : 1)) / 2.0;
+     }
+ 
+     /** 경사 항 f_s: min(1, max(0, |g| − τ) / 20), g = 구간 경사(%). */
+diff --git a/src/main/java/com/gildongmu/application/dto/RouteRecommendRequest.java b/src/main/java/com/gildongmu/application/dto/RouteRecommendRequest.java
+index bd5af23..e4a5c97 100644
+--- a/src/main/java/com/gildongmu/application/dto/RouteRecommendRequest.java
++++ b/src/main/java/com/gildongmu/application/dto/RouteRecommendRequest.java
+@@ -24,6 +24,8 @@ public class RouteRecommendRequest {
+     // 2026-11-10 밤 추가(선택): 조명 α_l, 물가 α_w. 없으면 0.
+     private Double alphaL;
+     private Double alphaW;
++    // 이름 있는 성질 선호(선택): 예 {"sidewalk": 3, "green": 3, "quiet": 3}. 노드 속성 파일의 같은 이름 열을 쓴다.
++    private java.util.Map<String, Double> alphaFlags;
+     // 러닝 동선 모양(선택, LOOP_V2 귀환에서만): 근접 벌점 반경(m)·크기, 회전 1회 비용(m)·각도(도, 기본 45). 없으면 0(기존과 같음).
+     private Double shapeProxRadius;
+     private Double shapeProxGamma;
+diff --git a/src/main/java/com/gildongmu/application/service/RouteService.java b/src/main/java/com/gildongmu/application/service/RouteService.java
+index 90b3027..93774b2 100644
+--- a/src/main/java/com/gildongmu/application/service/RouteService.java
++++ b/src/main/java/com/gildongmu/application/service/RouteService.java
+@@ -41,13 +41,13 @@ public class RouteService {
+     /** 요청에 α 값이 하나라도 있으면 선호 비용 방식(빈 값은 0), 없으면 null(기존 방식). */
+     static com.gildongmu.algorithm.loopv2.Preference preferenceOf(RouteRecommendRequest req) {
+         if (req.getAlphaS() == null && req.getAlphaC() == null && req.getAlphaF() == null
+-            && req.getAlphaL() == null && req.getAlphaW() == null) return null;
++            && req.getAlphaL() == null && req.getAlphaW() == null && req.getAlphaFlags() == null) return null;
+         return com.gildongmu.algorithm.loopv2.Preference.of(
+             req.getAlphaS() == null ? 0.0 : req.getAlphaS(),
+             req.getAlphaC() == null ? 0.0 : req.getAlphaC(),
+             req.getAlphaF() == null ? 0.0 : req.getAlphaF(),
+             req.getAlphaL() == null ? 0.0 : req.getAlphaL(),
+-            req.getAlphaW() == null ? 0.0 : req.getAlphaW());
++            req.getAlphaW() == null ? 0.0 : req.getAlphaW()).withFlags(req.getAlphaFlags());
+     }
+ 
+     /** 요청의 모양 값(없으면 0) → RouteShape. 모두 0이면 NONE(기존 귀환과 같음). */
+diff --git a/src/test/java/com/gildongmu/algorithm/loopv2/PreferenceTest.java b/src/test/java/com/gildongmu/algorithm/loopv2/PreferenceTest.java
+index e4aa905..7d51591 100644
+--- a/src/test/java/com/gildongmu/algorithm/loopv2/PreferenceTest.java
++++ b/src/test/java/com/gildongmu/algorithm/loopv2/PreferenceTest.java
+@@ -57,6 +57,16 @@ class PreferenceTest {
+         assertEquals(400.0, p.edgeCost(100, 0, 0, 500, 500, false, true, false, 80, 300), 1e-9);
+     }
+ 
++    @Test
++    void 이름_있는_성질_선호는_성질이_없는_끝점_비율만큼_비용을_준다() {
++        assertEquals(0.0, Preference.lackingTerm(true, true), 1e-12);
++        assertEquals(0.5, Preference.lackingTerm(true, false), 1e-12);
++        assertEquals(1.0, Preference.lackingTerm(false, false), 1e-12);
++        Preference p = Preference.of(0, 0, 0).withFlags(java.util.Map.of("sidewalk", 3.0));
++        assertEquals(3.0, p.flagAlpha().get("sidewalk"), 1e-12);
++        assertTrue(Preference.of(1, 1, 1).flagAlpha().isEmpty());
++    }
++
+     @Test
+     void 조명_물가_선호가_0이면_기존_비용과_같다() {
+         Preference p = Preference.of(1, 1, 1);
+-- 
+2.50.1.windows.1
+

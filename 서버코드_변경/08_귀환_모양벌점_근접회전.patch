@@ -1,0 +1,473 @@
+From a02c597cd6988bd9ffac2d7f10ef1dd14c789dd2 Mon Sep 17 00:00:00 2001
+From: lumos0107 <codinghallabong@gmail.com>
+Date: Tue, 10 Nov 2026 21:55:23 +0900
+Subject: [PATCH 08/11] =?UTF-8?q?LOOP=5FV2=20=EA=B7=80=ED=99=98=EC=97=90?=
+ =?UTF-8?q?=20=EB=9F=AC=EB=8B=9D=20=EB=8F=99=EC=84=A0=20=EB=AA=A8=EC=96=91?=
+ =?UTF-8?q?=20=EB=B2=8C=EC=A0=90=20=EC=B6=94=EA=B0=80(=EA=B7=BC=EC=A0=91?=
+ =?UTF-8?q?=C2=B7=ED=9A=8C=EC=A0=84,=20=EA=B8=B0=EB=B3=B8=200=EC=9D=B4?=
+ =?UTF-8?q?=EB=A9=B4=20=EA=B8=B0=EC=A1=B4=EA=B3=BC=20=EA=B0=99=EC=9D=8C)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- RouteShape: 외향 접두에서 도로 거리 r 안 간선에 길이×γ_p 벌점, 방위가 45°보다 크게 바뀌면 회 1회당 c_t(m)
+- ReturnPlanner: 회전 벌점이 있으면 간선 단위 다익스트라, 근접 집합은 다중 출발 다익스트라
+- 요청 값 shapeProxRadius/shapeProxGamma/shapeTurnCost/shapeTurnAngle (없으면 0)
+- 테스트 3개 추가(근접·회전·벌점 0이면 기존과 같음)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../algorithm/loopv2/LoopV2Algorithm.java     |  11 +-
+ .../algorithm/loopv2/LoopV2Engine.java        |  18 +-
+ .../algorithm/loopv2/ReturnPlanner.java       | 172 +++++++++++++++---
+ .../algorithm/loopv2/RouteShape.java          |  18 ++
+ .../dto/RouteRecommendRequest.java            |   5 +
+ .../application/service/RouteService.java     |  11 +-
+ .../algorithm/loopv2/ReturnPlannerTest.java   |  63 +++++++
+ 7 files changed, 273 insertions(+), 25 deletions(-)
+ create mode 100644 src/main/java/com/gildongmu/algorithm/loopv2/RouteShape.java
+
+diff --git a/src/main/java/com/gildongmu/algorithm/loopv2/LoopV2Algorithm.java b/src/main/java/com/gildongmu/algorithm/loopv2/LoopV2Algorithm.java
+index 182ad16..1e3d768 100644
+--- a/src/main/java/com/gildongmu/algorithm/loopv2/LoopV2Algorithm.java
++++ b/src/main/java/com/gildongmu/algorithm/loopv2/LoopV2Algorithm.java
+@@ -35,8 +35,17 @@ public class LoopV2Algorithm {
+                                     Double waypointLat, Double waypointLng,
+                                     double slopeWeight, double slopeThreshold,
+                                     Double gamma, Double outboundStopRatio, Preference pref) {
++        return generate(startLat, startLng, targetDistance, waypointLat, waypointLng,
++            slopeWeight, slopeThreshold, gamma, outboundStopRatio, pref, RouteShape.NONE);
++    }
++
++    /** shape: 귀환의 러닝 동선 모양 벌점(근접·회전). NONE이면 위와 같다. */
++    public List<BeamState> generate(double startLat, double startLng, double targetDistance,
++                                    Double waypointLat, Double waypointLng,
++                                    double slopeWeight, double slopeThreshold,
++                                    Double gamma, Double outboundStopRatio, Preference pref, RouteShape shape) {
+         return engine.generate(startLat, startLng, targetDistance, waypointLat, waypointLng,
+             directionSplitStrategy, slopeWeight, slopeThreshold,
+-            gamma == null ? DEFAULT_GAMMA : gamma, outboundStopRatio, pref);
++            gamma == null ? DEFAULT_GAMMA : gamma, outboundStopRatio, pref, shape);
+     }
+ }
+diff --git a/src/main/java/com/gildongmu/algorithm/loopv2/LoopV2Engine.java b/src/main/java/com/gildongmu/algorithm/loopv2/LoopV2Engine.java
+index 200d9bf..b360c77 100644
+--- a/src/main/java/com/gildongmu/algorithm/loopv2/LoopV2Engine.java
++++ b/src/main/java/com/gildongmu/algorithm/loopv2/LoopV2Engine.java
+@@ -63,6 +63,16 @@ public class LoopV2Engine {
+                                     BeamSearchStrategy strategy,
+                                     double slopeWeight, double slopeThreshold,
+                                     double gamma, Double outboundStopRatio, Preference pref) {
++        return generate(startLat, startLng, targetDistance, waypointLat, waypointLng, strategy,
++            slopeWeight, slopeThreshold, gamma, outboundStopRatio, pref, RouteShape.NONE);
++    }
++
++    /** shape: 귀환 비용의 러닝 동선 모양 벌점(근접·회전, 2026-11-10 밤). NONE이면 위와 같다. */
++    public List<BeamState> generate(double startLat, double startLng, double targetDistance,
++                                    Double waypointLat, Double waypointLng,
++                                    BeamSearchStrategy strategy,
++                                    double slopeWeight, double slopeThreshold,
++                                    double gamma, Double outboundStopRatio, Preference pref, RouteShape shape) {
+         long t0 = System.currentTimeMillis();
+         double tolerance = targetDistance * TOLERANCE_RATIO;
+         double[] target = (waypointLat != null)
+@@ -123,7 +133,7 @@ public class LoopV2Engine {
+ 
+         // ── 귀환: 빔마다 최단비용 귀환으로 폐합 ───────────────────────────
+         Map<Integer, JejuRoadPoint> points = new HashMap<>();
+-        ReturnPlanner planner = new ReturnPlanner(graphAdapter(points, pref), gamma, targetDistance * SEARCH_RADIUS_RATIO);
++        ReturnPlanner planner = new ReturnPlanner(graphAdapter(points, pref), gamma, targetDistance * SEARCH_RADIUS_RATIO, shape);
+         List<BeamState> loops = new ArrayList<>();
+         int within = 0;
+         for (BeamState ob : outbound) {
+@@ -174,6 +184,12 @@ public class LoopV2Engine {
+             @Override public double prefCost(int a, int b) {
+                 return pref == null ? 0.0 : LoopV2Engine.this.prefCost(points.get(a), points.get(b), pref);
+             }
++            @Override public double bearing(int a, int b) {
++                JejuRoadPoint p = points.get(a), q = points.get(b);
++                double dy = q.getLatitude() - p.getLatitude();
++                double dx = (q.getLongitude() - p.getLongitude()) * Math.cos(Math.toRadians(p.getLatitude()));
++                return Math.toDegrees(Math.atan2(dx, dy));
++            }
+             private double dist(JejuRoadPoint p, JejuRoadPoint q) {
+                 return HaversineUtil.calculate(p.getLatitude(), p.getLongitude(), q.getLatitude(), q.getLongitude());
+             }
+diff --git a/src/main/java/com/gildongmu/algorithm/loopv2/ReturnPlanner.java b/src/main/java/com/gildongmu/algorithm/loopv2/ReturnPlanner.java
+index 1973feb..4a49a89 100644
+--- a/src/main/java/com/gildongmu/algorithm/loopv2/ReturnPlanner.java
++++ b/src/main/java/com/gildongmu/algorithm/loopv2/ReturnPlanner.java
+@@ -34,6 +34,8 @@ public final class ReturnPlanner {
+          * 길이 비례 항(경사·편의시설)과 통과 1회당 항(신호 교차로)을 이미 합한 값이다.
+          */
+         default double prefCost(int a, int b) { return 0.0; }
++        /** a→b 진행 방위(도). 회전 벌점에만 쓴다. 모르면 NaN(회전으로 세지 않음). */
++        default double bearing(int a, int b) { return Double.NaN; }
+     }
+ 
+     /**
+@@ -49,11 +51,18 @@ public final class ReturnPlanner {
+     private final Graph graph;
+     private final double gamma;
+     private final double radiusMeters;
++    private final RouteShape shape;
+ 
+     public ReturnPlanner(Graph graph, double gamma, double radiusMeters) {
++        this(graph, gamma, radiusMeters, RouteShape.NONE);
++    }
++
++    /** shape: 러닝 동선 모양 벌점(근접·회전). NONE이면 기존과 같다. */
++    public ReturnPlanner(Graph graph, double gamma, double radiusMeters, RouteShape shape) {
+         this.graph = graph;
+         this.gamma = gamma;
+         this.radiusMeters = radiusMeters;
++        this.shape = shape == null ? RouteShape.NONE : shape;
+     }
+ 
+     public Result plan(List<Integer> outbound, double target, double toleranceRatio, int refineTop) {
+@@ -64,11 +73,11 @@ public final class ReturnPlanner {
+         for (int i = 1; i < n; i++) prefix[i] = prefix[i - 1] + graph.length(outbound.get(i - 1), outbound.get(i));
+ 
+         // 1) 외향 전체를 벌점 집합으로 한 근사 탐색 → 목표에 가까운 반환점 후보 추리기
+-        Search all = search(s, edgeKeys(outbound, n - 1));
++        Search all = search(s, edgeKeys(outbound, n - 1), near(outbound, n - 1));
+         List<int[]> ranked = new ArrayList<>();   // [k]
+         List<Double> gaps = new ArrayList<>();
+         for (int k = 1; k < n; k++) {
+-            Double back = all.real.get(outbound.get(k));
++            Double back = all.real(outbound.get(k));
+             if (back == null || outbound.get(k) == s) continue;
+             ranked.add(new int[]{k});
+             gaps.add(Math.abs(prefix[k] + back - target));
+@@ -83,12 +92,11 @@ public final class ReturnPlanner {
+         for (int i = 0; i < Math.min(refineTop, order.size()); i++) {
+             int k = ranked.get(order.get(i))[0];
+             Set<Long> prefixKeys = edgeKeys(outbound, k);
+-            Search sk = search(s, prefixKeys);
++            Search sk = search(s, prefixKeys, near(outbound, k));
+             int node = outbound.get(k);
+-            if (!sk.real.containsKey(node)) continue;
++            if (sk.real(node) == null) continue;
+ 
+-            List<Integer> ret = new ArrayList<>();
+-            for (Integer cur = node; cur != null; cur = sk.parent.get(cur)) ret.add(cur);
++            List<Integer> ret = sk.pathFrom(node);   // node → ... → s
+             double retLen = 0, retrace = 0;
+             for (int j = 1; j < ret.size(); j++) {
+                 double len = graph.length(ret.get(j - 1), ret.get(j));
+@@ -117,16 +125,32 @@ public final class ReturnPlanner {
+         return a.retraceLength() < b.retraceLength();
+     }
+ 
+-    private static final class Search {
+-        final Map<Integer, Double> cost = new HashMap<>();
+-        final Map<Integer, Double> real = new HashMap<>();
+-        final Map<Integer, Integer> parent = new HashMap<>();
++    /** 탐색 결과: 노드별 실제 길이와 s까지의 경로. */
++    private interface Search {
++        Double real(int node);
++        /** node → ... → s */
++        List<Integer> pathFrom(int node);
++    }
++
++    /** 간선 (u,v)의 탐색 비용(회전 제외): ℓ(1 + γ·1[외향 접두 간선] + γ_p·1[근접 간선]) + p(u,v). */
++    private double edgeCost(int u, int v, double len, Set<Long> penalized, Set<Integer> near) {
++        double mult = 1.0 + (penalized.contains(key(u, v)) ? gamma : 0.0);
++        if (near != null && near.contains(u) && near.contains(v)) mult += shape.proxGamma();
++        // c_k(u,v) = ℓ(1 + γ·1[외향 접두 간선] + γ_p·1[근접]) + p(u,v)   (p의 신호 항은 길이 곱과 분리, 계획서 2장)
++        return len * mult + graph.prefCost(u, v);
++    }
++
++    private Search search(int s, Set<Long> penalized, Set<Integer> near) {
++        return shape.usesTurns() ? searchWithTurns(s, penalized, near) : searchNodes(s, penalized, near);
+     }
+ 
+-    private Search search(int s, Set<Long> penalized) {
+-        Search r = new Search();
+-        r.cost.put(s, 0.0);
+-        r.real.put(s, 0.0);
++    /** 노드 단위 다익스트라(기존 귀환, 회전 벌점 없음). */
++    private Search searchNodes(int s, Set<Long> penalized, Set<Integer> near) {
++        Map<Integer, Double> cost = new HashMap<>();
++        Map<Integer, Double> real = new HashMap<>();
++        Map<Integer, Integer> parent = new HashMap<>();
++        cost.put(s, 0.0);
++        real.put(s, 0.0);
+         PriorityQueue<double[]> pq = new PriorityQueue<>(Comparator.comparingDouble(a -> a[0]));
+         pq.add(new double[]{0.0, s});
+         Set<Integer> done = new HashSet<>();
+@@ -138,19 +162,123 @@ public final class ReturnPlanner {
+                 if (done.contains(v)) continue;
+                 if (graph.straightDistance(s, v) > radiusMeters) continue;
+                 double len = graph.length(u, v);
+-                // c_k(u,v) = ℓ(1 + γ·1[외향 접두 간선]) + p(u,v)   (p의 신호 항은 길이 곱과 분리, 계획서 2장)
+-                double c = len * (1.0 + (penalized.contains(key(u, v)) ? gamma : 0.0)) + graph.prefCost(u, v);
+-                double nc = top[0] + c;
+-                Double old = r.cost.get(v);
++                double nc = top[0] + edgeCost(u, v, len, penalized, near);
++                Double old = cost.get(v);
+                 if (old == null || nc < old - 1e-12) {
+-                    r.cost.put(v, nc);
+-                    r.real.put(v, r.real.get(u) + len);
+-                    r.parent.put(v, u);
++                    cost.put(v, nc);
++                    real.put(v, real.get(u) + len);
++                    parent.put(v, u);
+                     pq.add(new double[]{nc, v});
+                 }
+             }
+         }
+-        return r;
++        return new Search() {
++            @Override public Double real(int node) { return real.get(node); }
++            @Override public List<Integer> pathFrom(int node) {
++                List<Integer> out = new ArrayList<>();
++                for (Integer cur = node; cur != null; cur = parent.get(cur)) out.add(cur);
++                return out;
++            }
++        };
++    }
++
++    /**
++     * 간선 단위 다익스트라(회전 벌점). 상태 = (직전 노드, 현재 노드). 방위가 turnAngleDeg보다 크게 바뀌면 turnCostMeters를 더한다.
++     * 방위가 대칭이므로 s에서 거꾸로 탐색해도 실제 귀환 방향의 회전 수와 같다.
++     */
++    private Search searchWithTurns(int s, Set<Long> penalized, Set<Integer> near) {
++        final long START = Long.MIN_VALUE;
++        Map<Long, Double> cost = new HashMap<>();
++        Map<Long, Double> real = new HashMap<>();
++        Map<Long, Long> parent = new HashMap<>();
++        Map<Integer, Long> bestState = new HashMap<>();   // 노드별 가장 싼 도착 상태
++        Map<Integer, Double> bestCost = new HashMap<>();
++        cost.put(START, 0.0);
++        real.put(START, 0.0);
++        bestState.put(s, START);
++        bestCost.put(s, 0.0);
++        PriorityQueue<Object[]> pq = new PriorityQueue<>(Comparator.comparingDouble(a -> (Double) a[0]));
++        pq.add(new Object[]{0.0, START, -1, s});
++        Set<Long> done = new HashSet<>();
++        while (!pq.isEmpty()) {
++            Object[] top = pq.poll();
++            double c0 = (Double) top[0];
++            long st = (Long) top[1];
++            int prev = (Integer) top[2];
++            int u = (Integer) top[3];
++            if (!done.add(st)) continue;
++            for (int v : graph.neighbors(u)) {
++                if (v == prev) continue;
++                if (graph.straightDistance(s, v) > radiusMeters) continue;
++                long ns = dkey(u, v);
++                if (done.contains(ns)) continue;
++                double len = graph.length(u, v);
++                double c = edgeCost(u, v, len, penalized, near);
++                if (prev >= 0 && isTurn(prev, u, v)) c += shape.turnCostMeters();
++                double nc = c0 + c;
++                Double old = cost.get(ns);
++                if (old == null || nc < old - 1e-12) {
++                    cost.put(ns, nc);
++                    real.put(ns, real.get(st) + len);
++                    parent.put(ns, st);
++                    pq.add(new Object[]{nc, ns, u, v});
++                    Double bc = bestCost.get(v);
++                    if (bc == null || nc < bc - 1e-12) { bestCost.put(v, nc); bestState.put(v, ns); }
++                }
++            }
++        }
++        return new Search() {
++            @Override public Double real(int node) {
++                Long st = bestState.get(node);
++                return st == null ? null : real.get(st);
++            }
++            @Override public List<Integer> pathFrom(int node) {
++                List<Integer> out = new ArrayList<>();
++                Long st = bestState.get(node);
++                while (st != null && st != START) {
++                    out.add((int) (st & 0xffffffffL));
++                    st = parent.get(st);
++                }
++                out.add(s);
++                return out;
++            }
++        };
++    }
++
++    private boolean isTurn(int a, int b, int c) {
++        double h1 = graph.bearing(a, b), h2 = graph.bearing(b, c);
++        if (Double.isNaN(h1) || Double.isNaN(h2)) return false;
++        double d = Math.abs(((h2 - h1) % 360 + 540) % 360 - 180);
++        return d > shape.turnAngleDeg();
++    }
++
++    /** 외향 접두 노드(0..lastIndex)에서 도로 거리 proxRadiusMeters 안의 노드(근접 벌점을 안 쓰면 null). */
++    private Set<Integer> near(List<Integer> path, int lastIndex) {
++        if (!shape.usesProximity()) return null;
++        Map<Integer, Double> dist = new HashMap<>();
++        PriorityQueue<double[]> pq = new PriorityQueue<>(Comparator.comparingDouble(a -> a[0]));
++        for (int i = 0; i <= lastIndex; i++) {
++            dist.put(path.get(i), 0.0);
++            pq.add(new double[]{0.0, path.get(i)});
++        }
++        Set<Integer> done = new HashSet<>();
++        while (!pq.isEmpty()) {
++            double[] top = pq.poll();
++            int u = (int) top[1];
++            if (!done.add(u)) continue;
++            for (int v : graph.neighbors(u)) {
++                double nd = top[0] + graph.length(u, v);
++                if (nd > shape.proxRadiusMeters()) continue;
++                Double old = dist.get(v);
++                if (old == null || nd < old) { dist.put(v, nd); pq.add(new double[]{nd, v}); }
++            }
++        }
++        return done;
++    }
++
++    /** 방향 있는 간선 키(a→b). */
++    private static long dkey(int a, int b) {
++        return ((long) a << 32) | (b & 0xffffffffL);
+     }
+ 
+     private static Set<Long> edgeKeys(List<Integer> path, int lastIndex) {
+diff --git a/src/main/java/com/gildongmu/algorithm/loopv2/RouteShape.java b/src/main/java/com/gildongmu/algorithm/loopv2/RouteShape.java
+new file mode 100644
+index 0000000..6dae037
+--- /dev/null
++++ b/src/main/java/com/gildongmu/algorithm/loopv2/RouteShape.java
+@@ -0,0 +1,18 @@
++/*
++ * RouteShape (정보기술학회 실험, 2026-11-10 밤 추가)
++ * - 러닝 동선 기준(Gemsa 외 2013: 모양·회전 복잡도, Hänsel 외 2025: 불필요한 회전 회피)을 돌아오는 구간 비용에 넣는 값.
++ * - proxRadiusMeters, proxGamma: 선택한 외향 접두 구간에서 도로 거리 proxRadiusMeters 안의 간선(두 끝 모두 안)에
++ *   길이 × proxGamma 벌점. 바로 옆 평행 도로로 돌아와 고리가 가늘어지는 것을 막는다.
++ * - turnCostMeters, turnAngleDeg: 돌아오는 구간에서 진행 방위가 turnAngleDeg보다 크게 바뀔 때마다 turnCostMeters(m) 벌점.
++ * - 모두 0이면 기존 귀환과 같다(NONE).
++ */
++package com.gildongmu.algorithm.loopv2;
++
++public record RouteShape(double proxRadiusMeters, double proxGamma, double turnCostMeters, double turnAngleDeg) {
++
++    public static final RouteShape NONE = new RouteShape(0.0, 0.0, 0.0, 45.0);
++
++    public boolean usesProximity() { return proxRadiusMeters > 0 && proxGamma > 0; }
++
++    public boolean usesTurns() { return turnCostMeters > 0; }
++}
+diff --git a/src/main/java/com/gildongmu/application/dto/RouteRecommendRequest.java b/src/main/java/com/gildongmu/application/dto/RouteRecommendRequest.java
+index 85d6f6b..4043480 100644
+--- a/src/main/java/com/gildongmu/application/dto/RouteRecommendRequest.java
++++ b/src/main/java/com/gildongmu/application/dto/RouteRecommendRequest.java
+@@ -21,5 +21,10 @@ public class RouteRecommendRequest {
+     private Double alphaS;
+     private Double alphaC;
+     private Double alphaF;
++    // 러닝 동선 모양(선택, LOOP_V2 귀환에서만): 근접 벌점 반경(m)·크기, 회전 1회 비용(m)·각도(도, 기본 45). 없으면 0(기존과 같음).
++    private Double shapeProxRadius;
++    private Double shapeProxGamma;
++    private Double shapeTurnCost;
++    private Double shapeTurnAngle;
+ }
+ 
+diff --git a/src/main/java/com/gildongmu/application/service/RouteService.java b/src/main/java/com/gildongmu/application/service/RouteService.java
+index 1595979..a205217 100644
+--- a/src/main/java/com/gildongmu/application/service/RouteService.java
++++ b/src/main/java/com/gildongmu/application/service/RouteService.java
+@@ -47,6 +47,15 @@ public class RouteService {
+             req.getAlphaF() == null ? 0.0 : req.getAlphaF());
+     }
+ 
++    /** 요청의 모양 값(없으면 0) → RouteShape. 모두 0이면 NONE(기존 귀환과 같음). */
++    static com.gildongmu.algorithm.loopv2.RouteShape shapeOf(RouteRecommendRequest req) {
++        double r = req.getShapeProxRadius() == null ? 0.0 : req.getShapeProxRadius();
++        double g = req.getShapeProxGamma() == null ? 0.0 : req.getShapeProxGamma();
++        double t = req.getShapeTurnCost() == null ? 0.0 : req.getShapeTurnCost();
++        double a = req.getShapeTurnAngle() == null ? 45.0 : req.getShapeTurnAngle();
++        return new com.gildongmu.algorithm.loopv2.RouteShape(r, g, t, a);
++    }
++
+     @Transactional
+     public RouteRecommendResponse recommend(RouteRecommendRequest req) {
+         double slopeWeight    = "beginner".equals(req.getDifficulty()) ? 4.0 : 0.5;
+@@ -58,7 +67,7 @@ public class RouteService {
+                 req.getTargetDistance(),
+                 req.getWaypointLat(), req.getWaypointLng(),
+                 slopeWeight, slopeThreshold,
+-                req.getReturnGamma(), req.getOutboundStopRatio(), preferenceOf(req))
++                req.getReturnGamma(), req.getOutboundStopRatio(), preferenceOf(req), shapeOf(req))
+             : beamSearch.generate(
+                 req.getLatitude(), req.getLongitude(),
+                 req.getTargetDistance(),
+diff --git a/src/test/java/com/gildongmu/algorithm/loopv2/ReturnPlannerTest.java b/src/test/java/com/gildongmu/algorithm/loopv2/ReturnPlannerTest.java
+index 58aa07b..9a16af3 100644
+--- a/src/test/java/com/gildongmu/algorithm/loopv2/ReturnPlannerTest.java
++++ b/src/test/java/com/gildongmu/algorithm/loopv2/ReturnPlannerTest.java
+@@ -128,4 +128,67 @@ class ReturnPlannerTest {
+         assertNotNull(noPref);
+         assertEquals(List.of(0, 1, 2, 3, 0), noPref.loop());  // 선호가 없으면 짧은 길(기존 동작)
+     }
++
++    /** 좌표가 있는 격자 그래프(방위 계산용). 노드 id = row*100 + col, 간격 100 m, 북쪽이 row 증가. */
++    static class GridGraph implements ReturnPlanner.Graph {
++        final TestGraph g = new TestGraph();
++        GridGraph edge(int a, int b) { g.edge(a, b, 100.0); return this; }
++        @Override public List<Integer> neighbors(int id) { return g.neighbors(id); }
++        @Override public double length(int a, int b) { return g.length(a, b); }
++        @Override public double straightDistance(int a, int b) { return 0.0; }
++        @Override public double bearing(int a, int b) {
++            double dx = (b % 100) - (a % 100), dy = (b / 100) - (a / 100);
++            return Math.toDegrees(Math.atan2(dx, dy));
++        }
++    }
++
++    @Test
++    void 근접_벌점이_있으면_바로_옆_평행_길이_아니라_떨어진_길로_돌아온다() {
++        // 외향: 0→1→2→3 (동쪽 300 m). 3에서 북쪽으로 돌아오는 길 두 가지:
++        //   가까운 평행 길: 3→103→102→101→100→0 (100 m 떨어짐, 500 m)
++        //   먼 평행 길:     3→103→203→202→201→200→100→0 (200 m 떨어짐, 700 m)
++        // 남북 연결길(1-101, 2-102)이 있는 실제 격자처럼 둔다(그래야 101·102가 외향에서 도로 거리 100 m).
++        GridGraph g = new GridGraph();
++        g.edge(0, 1).edge(1, 2).edge(2, 3).edge(3, 103).edge(0, 100).edge(1, 101).edge(2, 102)
++         .edge(100, 101).edge(101, 102).edge(102, 103)
++         .edge(103, 203).edge(100, 200).edge(200, 201).edge(201, 202).edge(202, 203);
++        ReturnPlanner none = new ReturnPlanner(g, 5.0, 10_000.0);
++        ReturnPlanner prox = new ReturnPlanner(g, 5.0, 10_000.0, new RouteShape(150.0, 3.0, 0.0, 45.0));
++
++        ReturnPlanner.Result a = none.plan(List.of(0, 1, 2, 3), 800.0, 0.5, 3);
++        ReturnPlanner.Result b = prox.plan(List.of(0, 1, 2, 3), 1000.0, 0.10, 3);
++
++        assertEquals(List.of(0, 1, 2, 3, 103, 102, 101, 100, 0), a.loop());           // 벌점 없음: 가까운 평행 길
++        assertEquals(List.of(0, 1, 2, 3, 103, 203, 202, 201, 200, 100, 0), b.loop());  // 근접 벌점: 먼 길
++        assertEquals(1000.0, b.length(), 1e-6);                                         // 길이는 실제 거리
++    }
++
++    @Test
++    void 회전_벌점이_있으면_계단_길보다_덜_꺾이는_길로_돌아온다() {
++        // 외향 0→1→2(동쪽 200 m). 2에서 0으로 돌아오는 길이가 같은(600 m) 두 길:
++        //   L자(꺾임 2번):  2→102→202→201→200→100→0  (북,북,서,서,남,남)
++        //   계단(꺾임 4번): 2→102→101→201→200→100→0  (북,서,북,서,남,남)
++        GridGraph g = new GridGraph();
++        g.edge(0, 1).edge(1, 2)
++         .edge(2, 102).edge(102, 202).edge(202, 201).edge(102, 101).edge(101, 201)
++         .edge(201, 200).edge(200, 100).edge(100, 0);
++        ReturnPlanner turn = new ReturnPlanner(g, 5.0, 10_000.0, new RouteShape(0.0, 0.0, 60.0, 45.0));
++        ReturnPlanner.Result r = turn.plan(List.of(0, 1, 2), 800.0, 0.10, 3);
++
++        assertNotNull(r);
++        assertEquals(800.0, r.length(), 1e-6);   // 길이는 회전 비용이 아니라 실제 거리
++        assertEquals(List.of(0, 1, 2, 102, 202, 201, 200, 100, 0), r.loop());
++    }
++
++    @Test
++    void 모양_벌점이_0이면_기존과_같은_경로를_만든다() {
++        GridGraph g = new GridGraph();
++        g.edge(0, 1).edge(1, 2).edge(2, 3).edge(3, 103).edge(0, 100)
++         .edge(100, 101).edge(101, 102).edge(102, 103)
++         .edge(103, 203).edge(100, 200).edge(200, 201).edge(201, 202).edge(202, 203);
++        ReturnPlanner.Result a = new ReturnPlanner(g, 5.0, 10_000.0).plan(List.of(0, 1, 2, 3), 800.0, 0.10, 3);
++        ReturnPlanner.Result b = new ReturnPlanner(g, 5.0, 10_000.0, RouteShape.NONE).plan(List.of(0, 1, 2, 3), 800.0, 0.10, 3);
++        assertEquals(a.loop(), b.loop());
++        assertEquals(a.length(), b.length(), 1e-9);
++    }
+ }
+-- 
+2.50.1.windows.1
+

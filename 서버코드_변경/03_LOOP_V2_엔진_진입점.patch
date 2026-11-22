@@ -1,0 +1,410 @@
+From 87817bb4ca0a412a448c603c30c84d4d21ec9861 Mon Sep 17 00:00:00 2001
+From: seungjun <codinghallabong@gmail.com>
+Date: Tue, 13 Oct 2026 03:06:07 +0900
+Subject: [PATCH 03/11] =?UTF-8?q?LOOP=5FV2=20=EC=97=94=EC=A7=84=C2=B7?=
+ =?UTF-8?q?=EC=A7=84=EC=9E=85=EC=A0=90=20=EC=B6=94=EA=B0=80,=20=EC=9A=94?=
+ =?UTF-8?q?=EC=B2=AD=20algorithm=3DLOOP=5FV2=EC=9D=BC=20=EB=95=8C=EB=A7=8C?=
+ =?UTF-8?q?=20=EC=82=AC=EC=9A=A9?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- LoopV2Engine: 외향은 기존 Phase 1 루프·후보 생성·안내점 선택을 옮겨 씀(종료 조건 기본값 동일, outboundStopRatio 옵션).
+  귀환은 Phase 2·트림·직선복귀 보정·BFS 폐합 대신 빔별 ReturnPlanner로 구조적 폐합.
+- RouteRecommendRequest: algorithm, returnGamma, outboundStopRatio (선택, 없으면 기존 동작).
+- RouteService: 분기 1곳. 기존 DIRECTION 알고리즘 코드는 변경 없음.
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+---
+ .../algorithm/loopv2/LoopV2Algorithm.java     |  33 +++
+ .../algorithm/loopv2/LoopV2Engine.java        | 276 ++++++++++++++++++
+ .../dto/RouteRecommendRequest.java            |   4 +
+ .../application/service/RouteService.java     |  21 +-
+ 4 files changed, 328 insertions(+), 6 deletions(-)
+ create mode 100644 src/main/java/com/gildongmu/algorithm/loopv2/LoopV2Algorithm.java
+ create mode 100644 src/main/java/com/gildongmu/algorithm/loopv2/LoopV2Engine.java
+
+diff --git a/src/main/java/com/gildongmu/algorithm/loopv2/LoopV2Algorithm.java b/src/main/java/com/gildongmu/algorithm/loopv2/LoopV2Algorithm.java
+new file mode 100644
+index 0000000..42f7b15
+--- /dev/null
++++ b/src/main/java/com/gildongmu/algorithm/loopv2/LoopV2Algorithm.java
+@@ -0,0 +1,33 @@
++/*
++ * LoopV2Algorithm
++ * - LOOP_V2(외향 빔서치 + 최단비용 귀환) 진입점. 기존 DIRECTION 알고리즘과 같은 외향 전략(DirectionSplitBeamSearchStrategy)을 쓴다.
++ * - RouteService에서 요청 algorithm=LOOP_V2 일 때만 호출된다(기본 동작은 기존 알고리즘).
++ */
++package com.gildongmu.algorithm.loopv2;
++
++import com.gildongmu.algorithm.BeamState;
++import com.gildongmu.algorithm.direction.DirectionSplitBeamSearchStrategy;
++import lombok.RequiredArgsConstructor;
++import org.springframework.stereotype.Component;
++
++import java.util.List;
++
++@Component
++@RequiredArgsConstructor
++public class LoopV2Algorithm {
++
++    /** 외향 간선 재사용 벌점 기본값(γ). 0이면 순수 최단거리 귀환(대조군). */
++    public static final double DEFAULT_GAMMA = 5.0;
++
++    private final LoopV2Engine engine;
++    private final DirectionSplitBeamSearchStrategy directionSplitStrategy;
++
++    public List<BeamState> generate(double startLat, double startLng, double targetDistance,
++                                    Double waypointLat, Double waypointLng,
++                                    double slopeWeight, double slopeThreshold,
++                                    Double gamma, Double outboundStopRatio) {
++        return engine.generate(startLat, startLng, targetDistance, waypointLat, waypointLng,
++            directionSplitStrategy, slopeWeight, slopeThreshold,
++            gamma == null ? DEFAULT_GAMMA : gamma, outboundStopRatio);
++    }
++}
+diff --git a/src/main/java/com/gildongmu/algorithm/loopv2/LoopV2Engine.java b/src/main/java/com/gildongmu/algorithm/loopv2/LoopV2Engine.java
+new file mode 100644
+index 0000000..6d95204
+--- /dev/null
++++ b/src/main/java/com/gildongmu/algorithm/loopv2/LoopV2Engine.java
+@@ -0,0 +1,276 @@
++/*
++ * LoopV2Engine
++ * - 기존 BeamSearchEngine은 그대로 두고 옆에 추가한 재설계 엔진(LOOP_V2).
++ * - 외향(Phase 1): 기존 엔진의 Phase 1 루프·후보 생성(buildCandidates)·안내점 선택을 그대로 옮겨 씀.
++ *   종료 조건은 기본값이 기존과 동일(0.48T+직선 2km 또는 0.51T, 예산 0.55T). outboundStopRatio를 주면 그 비율에서 종료(예산 +0.05T).
++ * - 귀환: 기존 Phase 2·끝 트림·직선복귀 보정·BFS 폐합을 쓰지 않고, 살아남은 외향 빔 각각에 ReturnPlanner(최단비용 귀환)를 적용해
++ *   구조적으로 닫힌 경로를 만든다. 길이는 실제 거리, 점수는 선택한 외향 접두 구간의 누적 점수.
++ * - 최종 선택: 허용범위(±10%) 안 경로가 있으면 그것만, 없으면 전부를 기존 전략의 selectFinalRoutes에 넘김.
++ */
++package com.gildongmu.algorithm.loopv2;
++
++import com.gildongmu.algorithm.BeamState;
++import com.gildongmu.algorithm.CandidateScore;
++import com.gildongmu.algorithm.GeoDataCache;
++import com.gildongmu.algorithm.HaversineUtil;
++import com.gildongmu.algorithm.ScoreCalculator;
++import com.gildongmu.algorithm.common.BeamSearchConfig;
++import com.gildongmu.algorithm.common.BeamSearchContext;
++import com.gildongmu.algorithm.common.BeamSearchStrategy;
++import com.gildongmu.database.entity.JejuRoadPoint;
++import com.gildongmu.database.entity.Obstacle;
++import com.gildongmu.database.entity.Place;
++import lombok.RequiredArgsConstructor;
++import lombok.extern.slf4j.Slf4j;
++import org.springframework.stereotype.Component;
++
++import java.util.ArrayList;
++import java.util.HashMap;
++import java.util.IdentityHashMap;
++import java.util.List;
++import java.util.Map;
++import java.util.stream.Collectors;
++
++@Slf4j
++@Component
++@RequiredArgsConstructor
++public class LoopV2Engine {
++
++    private static final double TOLERANCE_RATIO = 0.10;
++    private static final double SEARCH_RADIUS_RATIO = 0.7;   // 귀환 탐색 반경 = 0.7T(직선)
++    private static final int REFINE_TOP = 5;                  // 반환점 후보 재계산 개수
++
++    private final GeoDataCache cache;
++    private final BeamSearchConfig config = new BeamSearchConfig();
++
++    public List<BeamState> generate(double startLat, double startLng, double targetDistance,
++                                    Double waypointLat, Double waypointLng,
++                                    BeamSearchStrategy strategy,
++                                    double slopeWeight, double slopeThreshold,
++                                    double gamma, Double outboundStopRatio) {
++        long t0 = System.currentTimeMillis();
++        double tolerance = targetDistance * TOLERANCE_RATIO;
++        double[] target = (waypointLat != null)
++            ? new double[]{waypointLat, waypointLng}
++            : generateAnchorPoint(startLat, startLng, targetDistance);
++        BeamSearchContext context = new BeamSearchContext(startLat, startLng, target[0], target[1],
++            targetDistance, tolerance, config, cache);
++
++        JejuRoadPoint startPoint = cache.findNearestRoadPoint(startLat, startLng)
++            .orElseThrow(() -> new RuntimeException("출발점 근처 도로 없음"));
++        log.info("[LOOP_V2] 시작: 목표 {}m, γ={}, 외향종료={}", (int) targetDistance, gamma,
++            outboundStopRatio == null ? "기존(0.48T+2km/0.51T)" : outboundStopRatio + "T");
++
++        // ── 외향(Phase 1): 기존 엔진과 동일한 루프 ───────────────────────────
++        double budgetRatio = outboundStopRatio == null ? 0.55 : outboundStopRatio + 0.05;
++        Map<BeamState, List<Double>> stepScores = new IdentityHashMap<>();
++        List<BeamState> beams = strategy.initializeBeams(startPoint, context);
++        beams.forEach(b -> {
++            b.setAnchor(startLat, startLng);
++            b.setSideB(false);
++            stepScores.put(b, new ArrayList<>(List.of(0.0)));   // route[0]=출발점의 점수 0
++        });
++
++        int maxIter = config.getMaxIterations() / 2;
++        int iter = 0;
++        while (beams.stream().anyMatch(b -> !b.isCompleted()) && iter++ < maxIter) {
++            List<BeamState> completed = beams.stream().filter(BeamState::isCompleted).collect(Collectors.toList());
++            List<CandidateScore> all = buildCandidates(beams, context, strategy, slopeWeight, slopeThreshold, budgetRatio);
++            List<BeamState> next = new ArrayList<>(completed);
++            if (!all.isEmpty()) {
++                int remaining = Math.max(0, strategy.getBeamWidth(context) - completed.size());
++                for (CandidateScore cs : strategy.selectCandidates(all, remaining, context)) {
++                    BeamState nb = cs.getSourceBeam().clone();
++                    JejuRoadPoint cand = cs.getCandidate();
++                    nb.addPoint(cand, cs.getSegmentDistance(), cs.getScore());
++                    List<Double> sc = new ArrayList<>(stepScores.getOrDefault(cs.getSourceBeam(), List.of()));
++                    sc.add(cs.getScore());
++                    stepScores.put(nb, sc);
++                    double traveled = nb.getTraveledDistance();
++                    if (outboundStopRatio == null) {
++                        double fromStart = HaversineUtil.calculate(startLat, startLng, cand.getLatitude(), cand.getLongitude());
++                        if ((traveled >= targetDistance * 0.48 && fromStart >= 2000.0) || traveled >= targetDistance * 0.51) {
++                            nb.setPhaseOneBoundary(nb.getRoute().size());
++                            nb.setCompleted(true);
++                        }
++                    } else if (traveled >= targetDistance * outboundStopRatio) {
++                        nb.setPhaseOneBoundary(nb.getRoute().size());
++                        nb.setCompleted(true);
++                    }
++                    next.add(nb);
++                }
++            }
++            if (next.isEmpty()) break;
++            beams = next;
++        }
++        List<BeamState> outbound = beams.stream().filter(BeamState::isCompleted).collect(Collectors.toList());
++        if (outbound.isEmpty()) outbound = new ArrayList<>(beams);
++
++        // ── 귀환: 빔마다 최단비용 귀환으로 폐합 ───────────────────────────
++        Map<Integer, JejuRoadPoint> points = new HashMap<>();
++        ReturnPlanner planner = new ReturnPlanner(graphAdapter(points), gamma, targetDistance * SEARCH_RADIUS_RATIO);
++        List<BeamState> loops = new ArrayList<>();
++        int within = 0;
++        for (BeamState ob : outbound) {
++            List<JejuRoadPoint> route = ob.getRoute();
++            route.forEach(p -> points.put(p.getPointId(), p));
++            List<Integer> ids = route.stream().map(JejuRoadPoint::getPointId).collect(Collectors.toList());
++            ReturnPlanner.Result r = planner.plan(ids, targetDistance, TOLERANCE_RATIO, REFINE_TOP);
++            if (r == null) continue;
++            List<Double> sc = stepScores.getOrDefault(ob, List.of());
++            BeamState loop = new BeamState();
++            loop.setAnchor(startLat, startLng);
++            JejuRoadPoint prev = null;
++            for (int i = 0; i < r.loop().size(); i++) {
++                JejuRoadPoint p = points.get(r.loop().get(i));
++                double d = prev == null ? 0.0 : HaversineUtil.calculate(prev.getLatitude(), prev.getLongitude(), p.getLatitude(), p.getLongitude());
++                double s = (i <= r.k() && i < sc.size()) ? sc.get(i) : 0.0;
++                loop.addPoint(p, d, s);
++                prev = p;
++            }
++            loop.setPhaseOneBoundary(r.k() + 1);
++            loop.setTargetPassed(r.withinTolerance());
++            loop.setCompleted(true);
++            loops.add(loop);
++            if (r.withinTolerance()) within++;
++            log.info("[LOOP_V2]  빔 k={} 외향 {}m + 귀환 {}m = {}m, 되밟기 {}m, 허용범위 {}",
++                r.k(), (int) r.outboundLength(), (int) r.returnLength(), (int) r.length(), (int) r.retraceLength(), r.withinTolerance());
++        }
++        final int withinCount = within;
++        List<BeamState> pool = withinCount > 0
++            ? loops.stream().filter(BeamState::isTargetPassed).collect(Collectors.toList())
++            : loops;
++        List<BeamState> selected = pool.isEmpty() ? pool : strategy.selectFinalRoutes(pool, context);
++        log.info("[LOOP_V2] 완료: 외향 {}개 → 폐합 {}개(허용범위 안 {}개) → 선택 {}개, {}ms",
++            outbound.size(), loops.size(), withinCount, selected.size(), System.currentTimeMillis() - t0);
++        return selected;
++    }
++
++    private ReturnPlanner.Graph graphAdapter(Map<Integer, JejuRoadPoint> points) {
++        return new ReturnPlanner.Graph() {
++            @Override public List<Integer> neighbors(int id) {
++                List<JejuRoadPoint> nb = cache.getNeighbors(id);
++                List<Integer> out = new ArrayList<>(nb.size());
++                for (JejuRoadPoint p : nb) { points.putIfAbsent(p.getPointId(), p); out.add(p.getPointId()); }
++                return out;
++            }
++            @Override public double length(int a, int b) { return dist(points.get(a), points.get(b)); }
++            @Override public double straightDistance(int a, int b) { return dist(points.get(a), points.get(b)); }
++            private double dist(JejuRoadPoint p, JejuRoadPoint q) {
++                return HaversineUtil.calculate(p.getLatitude(), p.getLongitude(), q.getLatitude(), q.getLongitude());
++            }
++        };
++    }
++
++    // ── 아래 두 메서드는 BeamSearchEngine의 private 메서드를 그대로 옮긴 것(예산 비율만 인자로) ──
++
++    private List<CandidateScore> buildCandidates(List<BeamState> beams, BeamSearchContext context, BeamSearchStrategy strategy,
++                                                 double slopeWeight, double slopeThreshold, double budgetRatio) {
++        List<CandidateScore> allCandidates = new ArrayList<>();
++        for (BeamState beam : beams) {
++            if (beam.isCompleted()) continue;
++            JejuRoadPoint current = beam.getCurrentPoint();
++            double curLat = current.getLatitude();
++            double curLng = current.getLongitude();
++            double curElev = current.getElevationMeters() != null ? current.getElevationMeters() : 0.0;
++            List<JejuRoadPoint> candidates = context.getNeighbors(current.getPointId());
++            List<Obstacle> obstacles = cache.findObstaclesWithinRadius(curLat, curLng, context.getConfig().getObstacleQueryRadius());
++            List<Place> places = cache.findPlacesWithinRadius(curLat, curLng, context.getConfig().getPlaceQueryRadius());
++
++            List<JejuRoadPoint> route = beam.getRoute();
++            java.util.Set<Integer> recentIds = new java.util.HashSet<>();
++            for (JejuRoadPoint rp : route) recentIds.add(rp.getPointId());
++
++            double prevDirLat = 0, prevDirLng = 0;
++            boolean hasPrevDir = false;
++            double prevTurnAngle = 0;
++            if (route.size() >= 3) {
++                JejuRoadPoint r2 = route.get(route.size() - 2);
++                JejuRoadPoint r1 = route.get(route.size() - 1);
++                double ax = r2.getLatitude() - route.get(route.size() - 3).getLatitude();
++                double ay = r2.getLongitude() - route.get(route.size() - 3).getLongitude();
++                double bx = r1.getLatitude() - r2.getLatitude();
++                double by = r1.getLongitude() - r2.getLongitude();
++                double ma = Math.sqrt(ax * ax + ay * ay), mb = Math.sqrt(bx * bx + by * by);
++                if (ma > 0 && mb > 0) {
++                    double cosA = Math.max(-1.0, Math.min(1.0, (ax * bx + ay * by) / (ma * mb)));
++                    prevTurnAngle = Math.toDegrees(Math.acos(cosA));
++                }
++                prevDirLat = bx; prevDirLng = by;
++                hasPrevDir = mb > 0;
++            } else if (route.size() == 2) {
++                JejuRoadPoint r1 = route.get(route.size() - 1);
++                prevDirLat = r1.getLatitude() - route.get(0).getLatitude();
++                prevDirLng = r1.getLongitude() - route.get(0).getLongitude();
++                hasPrevDir = (prevDirLat * prevDirLat + prevDirLng * prevDirLng) > 0;
++            }
++
++            for (JejuRoadPoint candidate : candidates) {
++                if (recentIds.contains(candidate.getPointId())) continue;
++                List<JejuRoadPoint> candNeighbors = context.getNeighbors(candidate.getPointId());
++                if (candNeighbors.size() <= 1) continue;
++                long visitedNeighborCount = candNeighbors.stream().filter(n -> recentIds.contains(n.getPointId())).count();
++                if (visitedNeighborCount >= 2) continue;
++                if (beam.isSideB()) {
++                    double cLat = candidate.getLatitude(), cLng = candidate.getLongitude();
++                    boolean usedByPhase1 = beam.getVisitedPoints().stream()
++                        .anyMatch(p -> HaversineUtil.calculate(cLat, cLng, p[0], p[1]) <= 10.0);
++                    if (usedByPhase1) continue;
++                }
++                double candLat = candidate.getLatitude();
++                double candLng = candidate.getLongitude();
++                if (hasPrevDir && prevTurnAngle >= 45.0) {
++                    double cx = candLat - curLat, cy = candLng - curLng;
++                    double mc = Math.sqrt(cx * cx + cy * cy);
++                    double mp = Math.sqrt(prevDirLat * prevDirLat + prevDirLng * prevDirLng);
++                    if (mc > 0 && mp > 0) {
++                        double cosC = Math.max(-1.0, Math.min(1.0, (prevDirLat * cx + prevDirLng * cy) / (mp * mc)));
++                        if (Math.toDegrees(Math.acos(cosC)) >= 45.0) continue;
++                    }
++                }
++                double segDist = HaversineUtil.calculate(curLat, curLng, candLat, candLng);
++                if (segDist < context.getConfig().getMinStepDistance()) continue;
++                double predicted = beam.getTraveledDistance() + segDist;
++                if (predicted > context.getTargetDistance() * budgetRatio) continue;
++
++                double baseScore = ScoreCalculator.calculate(
++                    curLat, curLng, curElev, candidate, slopeWeight, slopeThreshold,
++                    context.getStartLat(), context.getStartLng(),
++                    beam.getAnchorLat(), beam.getAnchorLng(),
++                    beam.getTraveledDistance(), context.getTargetDistance(),
++                    obstacles, places, beam.getVisitedPoints(), beam.isSideB());
++                double adjustedScore = strategy.adjustScore(baseScore, beam, candidate, beams, context);
++                allCandidates.add(new CandidateScore(beam, candidate, adjustedScore, segDist));
++            }
++        }
++        return allCandidates;
++    }
++
++    private double[] generateAnchorPoint(double startLat, double startLng, double targetDistance) {
++        double anchorDist = targetDistance * 0.38;
++        double minAnchorDist = anchorDist * 0.85;
++        double maxAnchorDist = anchorDist * 1.15;
++        double cosLat = Math.cos(Math.toRadians(startLat));
++        Map<Integer, JejuRoadPoint> candidateMap = new java.util.LinkedHashMap<>();
++        for (double searchRadius : new double[]{600.0, 1200.0, 2000.0}) {
++            for (int i = 0; i < 16; i++) {
++                double rad = Math.toRadians(360.0 / 16 * i);
++                double dirLat = startLat + (anchorDist / 111000.0) * Math.cos(rad);
++                double dirLng = startLng + (anchorDist / (111000.0 * cosLat)) * Math.sin(rad);
++                cache.findRoadPointsWithinRadius(dirLat, dirLng, searchRadius).stream()
++                    .filter(p -> {
++                        double d = HaversineUtil.calculate(startLat, startLng, p.getLatitude(), p.getLongitude());
++                        return d >= minAnchorDist && d <= maxAnchorDist;
++                    })
++                    .forEach(p -> candidateMap.putIfAbsent(p.getPointId(), p));
++            }
++            if (!candidateMap.isEmpty()) break;
++        }
++        List<JejuRoadPoint> candidates = new ArrayList<>(candidateMap.values());
++        if (!candidates.isEmpty()) {
++            JejuRoadPoint chosen = candidates.get((int) (Math.random() * candidates.size()));
++            return new double[]{chosen.getLatitude(), chosen.getLongitude()};
++        }
++        return new double[]{startLat + anchorDist / 111000.0, startLng};
++    }
++}
+diff --git a/src/main/java/com/gildongmu/application/dto/RouteRecommendRequest.java b/src/main/java/com/gildongmu/application/dto/RouteRecommendRequest.java
+index cd382d0..9ad90c6 100644
+--- a/src/main/java/com/gildongmu/application/dto/RouteRecommendRequest.java
++++ b/src/main/java/com/gildongmu/application/dto/RouteRecommendRequest.java
+@@ -13,5 +13,9 @@ public class RouteRecommendRequest {
+     private String difficulty;
+     private Double waypointLat;
+     private Double waypointLng;
++    // 실험용(선택): "LOOP_V2"면 재설계 알고리즘, 없으면 기존 알고리즘. 아래 두 값은 LOOP_V2에서만 사용.
++    private String algorithm;
++    private Double returnGamma;
++    private Double outboundStopRatio;
+ }
+ 
+diff --git a/src/main/java/com/gildongmu/application/service/RouteService.java b/src/main/java/com/gildongmu/application/service/RouteService.java
+index d21fa46..f103db9 100644
+--- a/src/main/java/com/gildongmu/application/service/RouteService.java
++++ b/src/main/java/com/gildongmu/application/service/RouteService.java
+@@ -4,6 +4,7 @@ import com.gildongmu.algorithm.BeamState;
+ import com.gildongmu.algorithm.GeoDataCache;
+ import com.gildongmu.algorithm.HaversineUtil;
+ import com.gildongmu.algorithm.direction.DirectionSplitBeamSearchAlgorithm;
++import com.gildongmu.algorithm.loopv2.LoopV2Algorithm;
+ import com.gildongmu.application.dto.RouteRecommendRequest;
+ import com.gildongmu.application.dto.RouteRecommendResponse;
+ import com.gildongmu.application.dto.RouteRecommendResponse.*;
+@@ -32,6 +33,7 @@ import java.util.stream.Collectors;
+ public class RouteService {
+ 
+     private final DirectionSplitBeamSearchAlgorithm beamSearch;
++    private final LoopV2Algorithm loopV2;
+     private final GeoDataCache cache;
+     private final CourseRepository courseRepo;
+     private final CoursePointRepository coursePointRepo;
+@@ -41,12 +43,19 @@ public class RouteService {
+         double slopeWeight    = "beginner".equals(req.getDifficulty()) ? 4.0 : 0.5;
+         double slopeThreshold = "beginner".equals(req.getDifficulty()) ? 3.0 : 8.0;
+ 
+-        List<BeamState> beams = beamSearch.generate(
+-            req.getLatitude(), req.getLongitude(),
+-            req.getTargetDistance(),
+-            req.getWaypointLat(), req.getWaypointLng(),
+-            slopeWeight, slopeThreshold
+-        );
++        List<BeamState> beams = "LOOP_V2".equalsIgnoreCase(req.getAlgorithm())
++            ? loopV2.generate(
++                req.getLatitude(), req.getLongitude(),
++                req.getTargetDistance(),
++                req.getWaypointLat(), req.getWaypointLng(),
++                slopeWeight, slopeThreshold,
++                req.getReturnGamma(), req.getOutboundStopRatio())
++            : beamSearch.generate(
++                req.getLatitude(), req.getLongitude(),
++                req.getTargetDistance(),
++                req.getWaypointLat(), req.getWaypointLng(),
++                slopeWeight, slopeThreshold
++            );
+ 
+         List<RouteOption> options = beams.stream()
+             .map(beam -> saveCourseAndBuildOption(beam, req))
+-- 
+2.50.1.windows.1
+

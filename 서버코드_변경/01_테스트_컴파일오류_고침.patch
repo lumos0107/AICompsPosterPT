@@ -1,0 +1,37 @@
+From 8cc85dd982037f25bd25d731e52c663873871a34 Mon Sep 17 00:00:00 2001
+From: seungjun <codinghallabong@gmail.com>
+Date: Tue, 13 Oct 2026 03:03:04 +0900
+Subject: [PATCH 01/11] =?UTF-8?q?=ED=85=8C=EC=8A=A4=ED=8A=B8=20=EC=BB=B4?=
+ =?UTF-8?q?=ED=8C=8C=EC=9D=BC=20=EC=98=A4=EB=A5=98=20=EB=B3=B4=EC=88=98:?=
+ =?UTF-8?q?=20DIRECTION=20generate=20=ED=98=B8=EC=B6=9C=EC=97=90=20?=
+ =?UTF-8?q?=EA=B2=BD=EC=82=AC=20=EC=9D=B8=EC=9E=90=202=EA=B0=9C=20?=
+ =?UTF-8?q?=EC=B6=94=EA=B0=80?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+6월 시그니처 변경(slopeWeight, slopeThreshold)이 테스트에 반영되지 않아 compileTestJava가 실패하던 문제.
+값은 RouteService 일반 모드(0.5, 8.0)와 동일. 기존 동작 변경 없음.
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+---
+ .../algorithm/experiment/RealJejuRouteComparisonTest.java      | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/src/test/java/com/gildongmu/algorithm/experiment/RealJejuRouteComparisonTest.java b/src/test/java/com/gildongmu/algorithm/experiment/RealJejuRouteComparisonTest.java
+index aa555b9..c7fb5ed 100644
+--- a/src/test/java/com/gildongmu/algorithm/experiment/RealJejuRouteComparisonTest.java
++++ b/src/test/java/com/gildongmu/algorithm/experiment/RealJejuRouteComparisonTest.java
+@@ -41,7 +41,8 @@ class RealJejuRouteComparisonTest {
+         double targetDistance = 3000.0;
+ 
+         List<BeamState> basic = basicAlgorithm.generate(startLat, startLng, targetDistance, null, null);
+-        List<BeamState> direction = directionAlgorithm.generate(startLat, startLng, targetDistance, null, null);
++        // slopeWeight·slopeThreshold 인자 추가(시그니처 변경 반영). 값은 RouteService의 일반(normal) 모드와 같음.
++        List<BeamState> direction = directionAlgorithm.generate(startLat, startLng, targetDistance, null, null, 0.5, 8.0);
+         List<BeamState> macroDirection = macroDirectionAlgorithm.generate(startLat, startLng, targetDistance, null, null);
+ 
+         printSummary("BASIC", basic);
+-- 
+2.50.1.windows.1
+

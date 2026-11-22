@@ -1,0 +1,10 @@
+[    2s] 그래프 간선 21,579, 그래프 노드 19,448 → 노드 24,756, 간선 26,887, 길이 476.4km
+[    2s] 고도: 누락 0, 범위 1.6~145.7m
+[    2s] 교량 면 77개(범위 근처), 면 안 노드 65
+[    2s] 교량 보간: 덩어리 44, 고친 노드 65(최대 변화 6.1m), 못 고친 노드 0
+[    2s] 신호 노드 300 중 실험 그래프에 있는 것 300, 시설 2289개([('편의점', 1271), ('화장실', 747), ('공원', 271)]), 노드 시설 거리 중앙값 99m, 500m 상한 0.8%
+[    3s] gildongmu_v3를 지우고 다시 만듦(--rebuild)
+[    3s] gildongmu_v3 표 12개 생성(course_places, course_points, course_segments, courses, jeju_road_edges, jeju_road_points, obstacles, places, running_records, running_tracks, segment_obstacles, users), users 복사, obstacles·places 비움
+[    7s] 넣음: 점 24,756(스냅 대상 4,966), 방향 간선 53,774
+[    7s] 통계: {'db': 'gildongmu_v3', 'nodes': 24756, 'signal_nodes': 300, 'undirected_edges': 26887, 'length_km': 476.3504949498076, 'chord_over_length': 0.9975427400849877, 'edge_len_pct': {5: 2.367460863293184, 25: 5.0084704092131, 50: 11.164671934896523, 75: 23.7005561529216, 95: 52.20089491790843, 99: 93.92094811051642}, 'snap_nodes': 4966, 'bridge_nodes': 65, 'bridge_fixed': 65, 'bridge_unfixed': 0, 'facility_median_m': 99.20133384307977, 'resample_m': 15.0}
+[    7s] 끝

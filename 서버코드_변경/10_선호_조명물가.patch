@@ -1,0 +1,221 @@
+From d21f9aeee2b664f293f63fbce9992632751ab663 Mon Sep 17 00:00:00 2001
+From: lumos0107 <codinghallabong@gmail.com>
+Date: Tue, 10 Nov 2026 23:15:08 +0900
+Subject: [PATCH 10/11] =?UTF-8?q?=EC=84=A0=ED=98=B8=20=EB=B9=84=EC=9A=A9?=
+ =?UTF-8?q?=EC=97=90=20=EC=A1=B0=EB=AA=85(=CE=B1=5Fl)=C2=B7=EB=AC=BC?=
+ =?UTF-8?q?=EA=B0=80(=CE=B1=5Fw)=20=EC=B6=94=EA=B0=80(=EB=91=98=20?=
+ =?UTF-8?q?=EB=8B=A4=200=EC=9D=B4=EB=A9=B4=20=EA=B8=B0=EC=A1=B4=EA=B3=BC?=
+ =?UTF-8?q?=20=EA=B0=99=EC=9D=8C)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- 조명: 25 m 안 조명 없는 끝점 비율 × 길이, 물가: 해안·하천 50 m 밖 끝점 비율 × 길이
+- NodeAttributes가 선택 열 lit, water_m을 읽음(없으면 비용 0)
+- 요청 값 alphaL, alphaW
+- 테스트 2개
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../algorithm/loopv2/LoopV2Engine.java        |  3 +-
+ .../algorithm/loopv2/NodeAttributes.java      | 15 ++++++++
+ .../algorithm/loopv2/Preference.java          | 38 ++++++++++++++++---
+ .../dto/RouteRecommendRequest.java            |  3 ++
+ .../application/service/RouteService.java     |  7 +++-
+ .../algorithm/loopv2/PreferenceTest.java      | 16 ++++++++
+ 6 files changed, 73 insertions(+), 9 deletions(-)
+
+diff --git a/src/main/java/com/gildongmu/algorithm/loopv2/LoopV2Engine.java b/src/main/java/com/gildongmu/algorithm/loopv2/LoopV2Engine.java
+index 09e45cb..3b6d911 100644
+--- a/src/main/java/com/gildongmu/algorithm/loopv2/LoopV2Engine.java
++++ b/src/main/java/com/gildongmu/algorithm/loopv2/LoopV2Engine.java
+@@ -204,7 +204,8 @@ public class LoopV2Engine {
+         double eu = u.getElevationMeters() == null ? 0.0 : u.getElevationMeters();
+         double ev = v.getElevationMeters() == null ? eu : v.getElevationMeters();
+         return pref.edgeCost(len, eu, ev, attrs.facilityMeters(u.getPointId()), attrs.facilityMeters(v.getPointId()),
+-            attrs.isSignal(v.getPointId()));
++            attrs.isSignal(v.getPointId()), attrs.isLit(u.getPointId()), attrs.isLit(v.getPointId()),
++            attrs.waterMeters(u.getPointId()), attrs.waterMeters(v.getPointId()));
+     }
+ 
+     /** 방문 목록 끝에서부터 경로 길이 limit(m) 안에 드는 점의 개수(현재 노드 포함). */
+diff --git a/src/main/java/com/gildongmu/algorithm/loopv2/NodeAttributes.java b/src/main/java/com/gildongmu/algorithm/loopv2/NodeAttributes.java
+index 24e3c13..95e854b 100644
+--- a/src/main/java/com/gildongmu/algorithm/loopv2/NodeAttributes.java
++++ b/src/main/java/com/gildongmu/algorithm/loopv2/NodeAttributes.java
+@@ -29,6 +29,9 @@ public class NodeAttributes {
+ 
+     private final Set<Integer> signals = new HashSet<>();
+     private final Map<Integer, Double> facility = new HashMap<>();
++    // 2026-11-10 밤 추가(선택 열): lit(25 m 안 조명 0/1), water_m(해안·하천까지 m). 열이 없으면 조명 있음·물가로 보아 비용 0.
++    private final Set<Integer> dark = new HashSet<>();
++    private final Map<Integer, Double> water = new HashMap<>();
+     private final boolean loaded;
+ 
+     @Autowired   // 테스트용 생성자가 따로 있어 Spring이 쓸 생성자를 지정
+@@ -58,6 +61,16 @@ public class NodeAttributes {
+         return facility.getOrDefault(pointId, Preference.FACILITY_CAP_METERS);
+     }
+ 
++    /** 25 m 안에 조명이 있으면 true(열이 없으면 true). */
++    public boolean isLit(int pointId) {
++        return !dark.contains(pointId);
++    }
++
++    /** 해안·하천까지 거리(m). 열이 없으면 0(물가로 봄). */
++    public double waterMeters(int pointId) {
++        return water.getOrDefault(pointId, 0.0);
++    }
++
+     private void read(Path p) {
+         try {
+             List<String> lines = Files.readAllLines(p, StandardCharsets.UTF_8);
+@@ -68,6 +81,8 @@ public class NodeAttributes {
+                 int id = Integer.parseInt(v[0].strip());
+                 if ("1".equals(v[1].strip())) signals.add(id);
+                 facility.put(id, Double.parseDouble(v[2].strip()));
++                if (v.length > 3 && "0".equals(v[3].strip())) dark.add(id);
++                if (v.length > 4) water.put(id, Double.parseDouble(v[4].strip()));
+             }
+         } catch (IOException e) {
+             throw new UncheckedIOException("노드 속성 파일을 읽지 못함: " + p, e);
+diff --git a/src/main/java/com/gildongmu/algorithm/loopv2/Preference.java b/src/main/java/com/gildongmu/algorithm/loopv2/Preference.java
+index c573889..844e9e9 100644
+--- a/src/main/java/com/gildongmu/algorithm/loopv2/Preference.java
++++ b/src/main/java/com/gildongmu/algorithm/loopv2/Preference.java
+@@ -1,16 +1,18 @@
+ /*
+  * Preference (정보기술학회 실험, 2026-11-10)
+- * - 러너 선호 α = (α_s 경사, α_c 신호 교차로, α_f 편의시설). 0이면 그 선호를 고려하지 않는다.
++ * - 러너 선호 α = (α_s 경사, α_c 신호 교차로, α_f 편의시설, α_l 조명, α_w 물가). 0이면 그 선호를 고려하지 않는다.
++ *   조명·물가는 2026-11-10 밤 추가(러너 선호 문헌: 밝은 길, 물가·녹지 선호). 둘 다 0이면 기존과 같다.
+  * - 계획서 2장의 비용 단위:
+- *     경사·편의시설 = 구간 길이에 비례, 신호 교차로 = 통과 1회당(길이 곱과 분리).
++ *     경사·편의시설·조명·물가 = 구간 길이에 비례, 신호 교차로 = 통과 1회당(길이 곱과 분리).
+  * - 아래 상수는 2026-11-10 본 실험 전에 확정한 값이다(근거: 정보기술학회/실험/코드수정_1110/수식대조.md 3장).
+- *   예비 경로나 본 실험 결과를 보고 바꾼 값이 아니다.
++ *   예비 경로나 본 실험 결과를 보고 바꾼 값이 아니다. 물가 반경 50 m는 조명·물가를 추가하면서 정한 값이다.
+  */
+ package com.gildongmu.algorithm.loopv2;
+ 
+ public record Preference(double alphaS, double alphaC, double alphaF,
+                          double tauPercent, double signalPassMeters, double facilityCapMeters,
+-                         double lambdaP, double stepMeters, double reuseRecentMeters) {
++                         double lambdaP, double stepMeters, double reuseRecentMeters,
++                         double alphaL, double alphaW, double waterNearMeters) {
+ 
+     /** 경사 면제 임계값 τ(%) 확정값. */
+     public static final double TAU_PERCENT = 2.0;
+@@ -24,10 +26,16 @@ public record Preference(double alphaS, double alphaC, double alphaF,
+     public static final double STEP_METERS = 15.0;
+     /** 재사용 판정에서 뺄 최근 경로 길이(m). 지나온 길 중 이 길이 안의 점은 '재사용'으로 세지 않는다. */
+     public static final double REUSE_RECENT_METERS = 100.0;
++    /** 물가로 보는 해안·하천까지 거리(m). */
++    public static final double WATER_NEAR_METERS = 50.0;
+ 
+     public static Preference of(double alphaS, double alphaC, double alphaF) {
++        return of(alphaS, alphaC, alphaF, 0.0, 0.0);
++    }
++
++    public static Preference of(double alphaS, double alphaC, double alphaF, double alphaL, double alphaW) {
+         return new Preference(alphaS, alphaC, alphaF, TAU_PERCENT, SIGNAL_PASS_METERS, FACILITY_CAP_METERS,
+-            LAMBDA_P, STEP_METERS, REUSE_RECENT_METERS);
++            LAMBDA_P, STEP_METERS, REUSE_RECENT_METERS, alphaL, alphaW, WATER_NEAR_METERS);
+     }
+ 
+     /** 경사 항 f_s: min(1, max(0, |g| − τ) / 20), g = 구간 경사(%). */
+@@ -42,12 +50,30 @@ public record Preference(double alphaS, double alphaC, double alphaF,
+         return (Math.min(facU, facilityCapMeters) + Math.min(facV, facilityCapMeters)) / 2.0 / facilityCapMeters;
+     }
+ 
++    /** 조명 항 f_l: 두 끝 노드 중 25 m 안에 조명이 없는 비율(0, 0.5, 1). */
++    public double darkTerm(boolean litU, boolean litV) {
++        return ((litU ? 0 : 1) + (litV ? 0 : 1)) / 2.0;
++    }
++
++    /** 물가 항 f_w: 두 끝 노드 중 해안·하천에서 50 m 밖인 비율(0, 0.5, 1). */
++    public double inlandTerm(double waterU, double waterV) {
++        return ((waterU > waterNearMeters ? 1 : 0) + (waterV > waterNearMeters ? 1 : 0)) / 2.0;
++    }
++
+     /**
+      * 구간 (u,v)의 선호 비용 p(u,v) (단위 m).
+-     * p = ℓ·(α_s f_s + α_f f_f) + α_c·κ_c·1[v가 신호 교차로]
++     * p = ℓ·(α_s f_s + α_f f_f) + α_c·κ_c·1[v가 신호 교차로]   (조명·물가 항 없음, 기존과 같음)
+      */
+     public double edgeCost(double length, double elevU, double elevV, double facU, double facV, boolean signalV) {
++        return edgeCost(length, elevU, elevV, facU, facV, signalV, true, true, 0.0, 0.0);
++    }
++
++    /** p = ℓ·(α_s f_s + α_f f_f + α_l f_l + α_w f_w) + α_c·κ_c·1[v가 신호 교차로] */
++    public double edgeCost(double length, double elevU, double elevV, double facU, double facV, boolean signalV,
++                           boolean litU, boolean litV, double waterU, double waterV) {
+         double perLength = alphaS * slopeTerm(length, elevU, elevV) + alphaF * facilityTerm(facU, facV);
++        if (alphaL != 0.0) perLength += alphaL * darkTerm(litU, litV);
++        if (alphaW != 0.0) perLength += alphaW * inlandTerm(waterU, waterV);
+         return length * perLength + (signalV ? alphaC * signalPassMeters : 0.0);
+     }
+ }
+diff --git a/src/main/java/com/gildongmu/application/dto/RouteRecommendRequest.java b/src/main/java/com/gildongmu/application/dto/RouteRecommendRequest.java
+index f9b6600..bd5af23 100644
+--- a/src/main/java/com/gildongmu/application/dto/RouteRecommendRequest.java
++++ b/src/main/java/com/gildongmu/application/dto/RouteRecommendRequest.java
+@@ -21,6 +21,9 @@ public class RouteRecommendRequest {
+     private Double alphaS;
+     private Double alphaC;
+     private Double alphaF;
++    // 2026-11-10 밤 추가(선택): 조명 α_l, 물가 α_w. 없으면 0.
++    private Double alphaL;
++    private Double alphaW;
+     // 러닝 동선 모양(선택, LOOP_V2 귀환에서만): 근접 벌점 반경(m)·크기, 회전 1회 비용(m)·각도(도, 기본 45). 없으면 0(기존과 같음).
+     private Double shapeProxRadius;
+     private Double shapeProxGamma;
+diff --git a/src/main/java/com/gildongmu/application/service/RouteService.java b/src/main/java/com/gildongmu/application/service/RouteService.java
+index 5fad0ae..90b3027 100644
+--- a/src/main/java/com/gildongmu/application/service/RouteService.java
++++ b/src/main/java/com/gildongmu/application/service/RouteService.java
+@@ -40,11 +40,14 @@ public class RouteService {
+ 
+     /** 요청에 α 값이 하나라도 있으면 선호 비용 방식(빈 값은 0), 없으면 null(기존 방식). */
+     static com.gildongmu.algorithm.loopv2.Preference preferenceOf(RouteRecommendRequest req) {
+-        if (req.getAlphaS() == null && req.getAlphaC() == null && req.getAlphaF() == null) return null;
++        if (req.getAlphaS() == null && req.getAlphaC() == null && req.getAlphaF() == null
++            && req.getAlphaL() == null && req.getAlphaW() == null) return null;
+         return com.gildongmu.algorithm.loopv2.Preference.of(
+             req.getAlphaS() == null ? 0.0 : req.getAlphaS(),
+             req.getAlphaC() == null ? 0.0 : req.getAlphaC(),
+-            req.getAlphaF() == null ? 0.0 : req.getAlphaF());
++            req.getAlphaF() == null ? 0.0 : req.getAlphaF(),
++            req.getAlphaL() == null ? 0.0 : req.getAlphaL(),
++            req.getAlphaW() == null ? 0.0 : req.getAlphaW());
+     }
+ 
+     /** 요청의 모양 값(없으면 0) → RouteShape. 모두 0이면 NONE(기존 귀환과 같음). */
+diff --git a/src/test/java/com/gildongmu/algorithm/loopv2/PreferenceTest.java b/src/test/java/com/gildongmu/algorithm/loopv2/PreferenceTest.java
+index 7a4175c..e4aa905 100644
+--- a/src/test/java/com/gildongmu/algorithm/loopv2/PreferenceTest.java
++++ b/src/test/java/com/gildongmu/algorithm/loopv2/PreferenceTest.java
+@@ -47,4 +47,20 @@ class PreferenceTest {
+         assertEquals(0.0, p.facilityTerm(0, 0), 1e-12);
+         assertEquals(0.3, p.facilityTerm(100, 200), 1e-12);
+     }
++
++    @Test
++    void 조명_물가_항은_어둡거나_물가에서_먼_구간에_길이_비례_비용을_준다() {
++        Preference p = Preference.of(0, 0, 0, 2.0, 3.0);
++        // 100 m 구간: 두 끝 모두 조명 있음, 물가 30 m 안 → 비용 0
++        assertEquals(0.0, p.edgeCost(100, 0, 0, 500, 500, false, true, true, 30, 30), 1e-9);
++        // 한 끝만 어두움(0.5), 두 끝 모두 물가 밖(1) → 100·(2·0.5 + 3·1) = 400
++        assertEquals(400.0, p.edgeCost(100, 0, 0, 500, 500, false, true, false, 80, 300), 1e-9);
++    }
++
++    @Test
++    void 조명_물가_선호가_0이면_기존_비용과_같다() {
++        Preference p = Preference.of(1, 1, 1);
++        assertEquals(p.edgeCost(100, 0, 6, 200, 400, true),
++                     p.edgeCost(100, 0, 6, 200, 400, true, false, false, 400, 400), 1e-12);
++    }
+ }
+-- 
+2.50.1.windows.1
+

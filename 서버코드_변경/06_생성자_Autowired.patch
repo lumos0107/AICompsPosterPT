@@ -1,0 +1,62 @@
+From 45f8571bed5c34637eb2251a3e5d6b6557964e07 Mon Sep 17 00:00:00 2001
+From: lumos0107 <codinghallabong@gmail.com>
+Date: Tue, 10 Nov 2026 17:30:29 +0900
+Subject: [PATCH 06/11] =?UTF-8?q?ExperimentArea=C2=B7NodeAttributes:=20Spr?=
+ =?UTF-8?q?ing=EC=9D=B4=20=EC=93=B8=20=EC=83=9D=EC=84=B1=EC=9E=90=EC=97=90?=
+ =?UTF-8?q?=20@Autowired=20=EC=A7=80=EC=A0=95?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+테스트용 생성자가 따로 있어 서버 시작 때 기본 생성자를 찾다 실패하던 문제(단위 테스트로는 안 잡힘).
+테스트 23개 통과(GildongmuApplicationTests는 수정 전부터 RDS 주소 문제로 실패).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../java/com/gildongmu/algorithm/loopv2/ExperimentArea.java     | 2 ++
+ .../java/com/gildongmu/algorithm/loopv2/NodeAttributes.java     | 2 ++
+ 2 files changed, 4 insertions(+)
+
+diff --git a/src/main/java/com/gildongmu/algorithm/loopv2/ExperimentArea.java b/src/main/java/com/gildongmu/algorithm/loopv2/ExperimentArea.java
+index 0f9a550..acbd900 100644
+--- a/src/main/java/com/gildongmu/algorithm/loopv2/ExperimentArea.java
++++ b/src/main/java/com/gildongmu/algorithm/loopv2/ExperimentArea.java
+@@ -7,6 +7,7 @@
+  */
+ package com.gildongmu.algorithm.loopv2;
+ 
++import org.springframework.beans.factory.annotation.Autowired;
+ import org.springframework.beans.factory.annotation.Value;
+ import org.springframework.stereotype.Component;
+ 
+@@ -26,6 +27,7 @@ public class ExperimentArea {
+ 
+     private final Set<Long> cells;   // null이면 제한 없음
+ 
++    @Autowired   // 테스트용 생성자가 따로 있어 Spring이 쓸 생성자를 지정
+     public ExperimentArea(@Value("${gildongmu.experiment-area-file:}") String file) {
+         this.cells = (file == null || file.isBlank()) ? null : read(Path.of(file));
+     }
+diff --git a/src/main/java/com/gildongmu/algorithm/loopv2/NodeAttributes.java b/src/main/java/com/gildongmu/algorithm/loopv2/NodeAttributes.java
+index 74bdb38..24e3c13 100644
+--- a/src/main/java/com/gildongmu/algorithm/loopv2/NodeAttributes.java
++++ b/src/main/java/com/gildongmu/algorithm/loopv2/NodeAttributes.java
+@@ -8,6 +8,7 @@
+ package com.gildongmu.algorithm.loopv2;
+ 
+ import lombok.extern.slf4j.Slf4j;
++import org.springframework.beans.factory.annotation.Autowired;
+ import org.springframework.beans.factory.annotation.Value;
+ import org.springframework.stereotype.Component;
+ 
+@@ -30,6 +31,7 @@ public class NodeAttributes {
+     private final Map<Integer, Double> facility = new HashMap<>();
+     private final boolean loaded;
+ 
++    @Autowired   // 테스트용 생성자가 따로 있어 Spring이 쓸 생성자를 지정
+     public NodeAttributes(@Value("${gildongmu.node-attr-file:}") String file) {
+         this.loaded = file != null && !file.isBlank();
+         if (loaded) {
+-- 
+2.50.1.windows.1
+

@@ -1,0 +1,110 @@
+=== writing 스크립트의 HERE 사용
+build_concept_figs.py:19: FIG = os.path.join(HERE, "figures")
+build_concept_figs.py:41: path = os.path.join(FIG, name)
+build_docx.py:10: FIG = os.path.join(HERE, "..", "experiments", "gildongmu-experiment", "figure", "routes_이도-4km.png")
+build_docx.py:11: OUT = os.path.join(HERE, "drafts", "논문v3.docx")
+build_docx.py:160: center(doc.add_paragraph()).add_run().add_picture(FIG, width=Inches(6.2))
+build_docx_paper.py:20: SRC = os.path.join(HERE, "drafts", "논문v4.md")
+build_docx_paper.py:21: OUT = os.path.join(HERE, "drafts", "논문v4_학회양식.docx")
+build_docx_v4.py:20: SRC = os.path.join(HERE, "drafts", "논문v4.md")
+build_docx_v4.py:21: OUT = os.path.join(HERE, "drafts", "논문v4.docx")
+build_easy_docx.py:9: SRC = os.path.join(HERE, "쉬운설명_길동무.md")
+build_easy_docx.py:10: OUT = os.path.join(HERE, "쉬운설명_길동무.docx")
+build_easy_docx.py:48: img = os.path.join(HERE, m.group(2))
+build_figures.py:13: FIGDIR = os.path.join(HERE, "figures")
+build_figures_en.py:13: FIGDIR = os.path.join(HERE, "figures", "en")
+build_greedy_fig.py:13: OUT = os.path.join(HERE, "figures", "fig_greedy_vs_beam.png")
+build_greedy_long_fig.py:12: OUT = os.path.join(HERE, "figures", "fig_greedy_long.png")
+build_poster.py:13: FIG = os.path.join(HERE, "figures")
+build_poster.py:14: OUT = os.path.join(HERE, "drafts", "길동무_poster.pptx")
+build_poster.py:87: h = picture(os.path.join(FIG, "fig1_architecture.png"), LX + 1, 30.5, LW - 2)
+build_poster.py:97: h = picture(os.path.join(FIG, "team_direction_routes.png"), LX + 1, 74, LW - 2)
+build_poster.py:115: h = picture(os.path.join(FIG, "fig_ablation_compare.png"), RX + 1, 44.5, RW - 2)
+build_pseudocode_explainer.py:15: ICON = os.path.join(HERE, "figures", "icons")
+build_pseudocode_explainer.py:16: OUT = os.path.join(HERE, "drafts", "길동무_의사코드_설명.pptx")
+build_report_ppt.py:17: FIG = os.path.join(HERE, "figures")
+build_report_ppt.py:18: ICON = os.path.join(FIG, "icons")   # Tabler Icons(MIT) 변환본
+build_report_ppt.py:19: OUT = os.path.join(HERE, "drafts", "길동무_중간보고.pptx")
+build_report_ppt.py:183: pic = slide.shapes.add_picture(os.path.join(FIG, path), Cm(l), Cm(t), **kw)
+build_script_pdf.py:15: MD = os.path.join(HERE, "발표_대본_중간보고.md")
+build_script_pdf.py:16: OUT = os.path.join(HERE, "drafts", "길동무_중간보고_대본.pdf")
+build_script_ppt.py:18: MD = os.path.join(HERE, "발표_대본_중간보고.md")
+build_script_ppt.py:19: OUT = os.path.join(HERE, "drafts", "길동무_대본.pptx")
+=== experiments EXP / .. / sys.path
+experiments\build_ablation_compare_fig.py:4: 출력: ../writing/figures/fig_ablation_compare.png
+experiments\build_ablation_compare_fig.py:14: OUT = os.path.normpath(os.path.join(HERE, "..", "writing", "figures", "fig_ablation_compare.png"))
+experiments\build_ablation_compare_fig_en.py:4: 출력: ../writing/figures/en/fig5_ablation_compare.png
+experiments\build_ablation_compare_fig_en.py:14: OUT = os.path.normpath(os.path.join(HERE, "..", "writing", "figures", "en", "fig5_ablation_compare.png"))
+experiments\generate_course_description.py:17: OUT = os.path.join(HERE, "..", "writing", "course_descriptions.txt")
+experiments\parse_course_request.py:18: OUT = os.path.join(HERE, "..", "writing", "course_requests.txt")
+experiments\render_pretty_map.py:15: FIG = os.path.normpath(os.path.join(HERE, "..", "writing", "figures"))
+experiments\render_road_map.py:17: FIG = os.path.normpath(os.path.join(HERE, "..", "writing", "figures"))
+experiments\render_route_map.py:12: FIG = os.path.normpath(os.path.join(HERE, "..", "writing", "figures"))
+experiments\run5_candidates.py:4: 출력: ../writing/figures/team_run{1..5}.png, team_direction_run{1..5}.csv
+experiments\run5_candidates.py:14: FIGDIR = os.path.normpath(os.path.join(HERE, "..", "writing", "figures"))
+experiments\team_direction_map.py:4: 출력: ../writing/figures/team_direction_routes.png
+experiments\team_direction_map.py:15: OUT = os.path.normpath(os.path.join(HERE, "..", "writing", "figures", "team_direction_routes.png"))
+experiments\team_direction_map_en.py:4: 출력: ../writing/figures/en/fig4_routes.png
+experiments\team_direction_map_en.py:15: OUT = os.path.normpath(os.path.join(HERE, "..", "writing", "figures", "en", "fig4_routes.png"))
+experiments\gildongmu-real\build_route_figures.py:4: 출력: ../writing/figures/fig4_compare.png, fig5_macro_routes.png
+experiments\gildongmu-real\build_route_figures.py:17: FIGDIR = os.path.normpath(os.path.join(HERE, "..", "..", "writing", "figures"))
+experiments\loopv2_run\analyze_conditions.py:15: "A 기존그래프+DIRECTION": ([os.path.join(EXP, f"team_direction_run{i}.csv") for i in range(1, 6)], None),
+experiments\loopv2_run\analyze_conditions.py:16: "B v2b+DIRECTION": ([os.path.join(EXP, "v2b_run", f"team_direction_v2b_run{i}.csv") for i in range(1, 6)],
+experiments\loopv2_run\analyze_conditions.py:17: [os.path.join(EXP, "v2b_run", f"measure_v2b_run{i}.log") for i in range(1, 6)]),
+experiments\loopv2_run\make_figures.py:19: ("A", "A 기존그래프\n+ 기존 알고리즘(6월)", os.path.join(EXP, f"team_direction_run{RUN}.csv"), "gildongmu"),
+experiments\loopv2_run\make_figures.py:20: ("B", "B 새 그래프(v2b)\n+ 기존 알고리즘", os.path.join(EXP, "v2b_run", f"team_direction_v2b_run{RUN}.csv"), "gildongmu_v2b"),
+experiments\loopv2_run\shape_metrics.py:11: "A 기존그래프+DIRECTION": [os.path.join(EXP, f"team_direction_run{i}.csv") for i in range(1, 6)],
+experiments\loopv2_run\shape_metrics.py:12: "B v2b+DIRECTION": [os.path.join(EXP, "v2b_run", f"team_direction_v2b_run{i}.csv") for i in range(1, 6)],
+experiments\osm_coverage\osm_coverage_pbf.py:13: PBF = os.environ.get("OSM_PBF") or os.path.join(HERE, "..", "..", "reading", "references_data", "osm", "south-korea-latest.osm.pbf")
+experiments\team-latest-back\collection\load_master_csv.py:23: CSV_PATH = os.path.join(os.path.dirname(__file__), "..", "jeju_gildongmu_final_master.csv")
+experiments\v1_run\start_server_v1.sh:11: exec "$JAVA_HOME/bin/java" -Xmx48g -jar ../team-latest-back/build/libs/gildongmu-0.0.1-SNAPSHOT.jar > server_v1.log 2>&1
+experiments\v2b_run\compare_v1_v2.py:3: 지표 정의는 ../build_multirun_stats.py와 동일(고도=gildongmu 최근접 도로점, 장애물 15m 고유 개수,
+experiments\v2b_run\compare_v1_v2.py:13: EXP = os.path.dirname(HERE)
+experiments\v2b_run\compare_v1_v2.py:75: V1 = [os.path.join(EXP, f"team_direction_run{i}.csv") for i in range(1, 6)]
+experiments\v2b_run\compare_v1_v2.py:92: for name, p in [("v1 ablation_proposed", os.path.join(EXP, "ablation_proposed.csv")), ("v2 ablation_proposed", os.path.join(HERE, "ablation_proposed.c
+experiments\v2b_run\map_routes.py:4: 출력: ../writing/figures/en/fig4_routes.png
+experiments\v2b_run\retrace_ratio.py:33: for name, files in [("v1 (6월, 기존 그래프)", [os.path.join(EXP, f"team_direction_run{i}.csv") for i in range(1, 6)]),
+experiments\v2b_run\start_server_v2b.sh:11: exec "$JAVA_HOME/bin/java" -Xmx48g -jar ../team-latest-back/build/libs/gildongmu-0.0.1-SNAPSHOT.jar > server_v2b.log 2>&1
+experiments\v2_run\compare_v1_v2.py:3: 지표 정의는 ../build_multirun_stats.py와 동일(고도=gildongmu 최근접 도로점, 장애물 15m 고유 개수,
+experiments\v2_run\compare_v1_v2.py:13: EXP = os.path.dirname(HERE)
+experiments\v2_run\compare_v1_v2.py:75: V1 = [os.path.join(EXP, f"team_direction_run{i}.csv") for i in range(1, 6)]
+experiments\v2_run\compare_v1_v2.py:92: for name, p in [("v1 ablation_proposed", os.path.join(EXP, "ablation_proposed.csv")), ("v2 ablation_proposed", os.path.join(HERE, "ablation_proposed.c
+experiments\v2_run\start_server_v2.sh:11: exec "$JAVA_HOME/bin/java" -Xmx48g -jar ../team-latest-back/build/libs/gildongmu-0.0.1-SNAPSHOT.jar > server_v2.log 2>&1
+=== md·html 링크
+handoff\README.md -> 2026-11-08-handoff.md
+handoff\README.md -> 2026-10-12-handoff.md
+handoff\README.md -> 2026-06-05-handoff.md
+handoff\README.md -> 2026-06-04-handoff.md
+handoff\README.md -> 2026-06-03-handoff-2.md
+handoff\README.md -> ../팀최신본_분석.md
+handoff\README.md -> ../MASTER.md
+handoff\README.md -> 2026-06-03-handoff.md
+writing\쉬운설명_길동무.md -> figures/fig1_architecture.png
+writing\drafts\논문v3.md -> ../../experiments/gildongmu-experiment/figure/routes_이도-4km.png
+writing\drafts\논문v4.md -> ../figures/fig1_architecture.png
+writing\drafts\논문v4.md -> ../figures/fig3_roadnetwork.png
+writing\drafts\논문v4.md -> ../figures/fig2_db_schema.png
+writing\drafts\논문v4.md -> ../figures/fig4_compare.png
+writing\drafts\논문v4.md -> ../figures/fig5_macro_routes.png
+writing\drafts\논문v5.1.md -> ../figures/fig1_architecture.png
+writing\drafts\논문v5.1.md -> ../figures/fig2_db_schema.png
+writing\drafts\논문v5.1.md -> ../figures/fig3_roadnetwork.png
+writing\drafts\논문v5.1.md -> ../figures/team_direction_routes.png
+writing\drafts\논문v5.md -> ../figures/fig1_architecture.png
+writing\drafts\논문v5.md -> ../figures/fig2_db_schema.png
+writing\drafts\논문v5.md -> ../figures/fig3_roadnetwork.png
+writing\drafts\논문v5.md -> ../figures/team_direction_routes.png
+writing\drafts\논문v5.md -> ../figures/fig_ablation_compare.png
+writing\drafts\논문v6.md -> ../figures/fig1_architecture.png
+writing\drafts\논문v6.md -> ../figures/fig2_db_schema.png
+writing\drafts\논문v6.md -> ../figures/fig3_roadnetwork.png
+writing\drafts\논문v6.md -> ../figures/team_direction_routes.png
+writing\drafts\논문v6.md -> ../figures/fig_ablation_compare.png
+writing\drafts\정보기술학회\논문_정보기술학회_v1.md -> ../../../experiments/loopv2_run/조건별_F_run4.png
+writing\mockup\ai_ui.html -> ../figures/map_topdong.png
+writing\mockup\ai_ui.html -> ../figures/map_ido.png
+=== 다른 프로젝트에서 논문 폴더 참조
+1  README.md
+1  .vscode\settings.json
+1  기타\_정리보관\MEMORY_색인_백업_20261104.md
+2  베리어프리\README.md

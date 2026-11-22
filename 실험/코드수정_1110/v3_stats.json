@@ -1,0 +1,22 @@
+{
+ "db": "gildongmu_v3",
+ "nodes": 24756,
+ "signal_nodes": 300,
+ "undirected_edges": 26887,
+ "length_km": 476.3504949498076,
+ "chord_over_length": 0.9975427400849877,
+ "edge_len_pct": {
+  "5": 2.367460863293184,
+  "25": 5.0084704092131,
+  "50": 11.164671934896523,
+  "75": 23.7005561529216,
+  "95": 52.20089491790843,
+  "99": 93.92094811051642
+ },
+ "snap_nodes": 4966,
+ "bridge_nodes": 65,
+ "bridge_fixed": 65,
+ "bridge_unfixed": 0,
+ "facility_median_m": 99.20133384307977,
+ "resample_m": 15.0
+}

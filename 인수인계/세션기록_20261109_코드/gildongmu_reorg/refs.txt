@@ -1,0 +1,142 @@
+experiments\build_ablation_compare_fig.py:4: 출력: ../writing/figures/fig_ablation_compare.png
+experiments\build_ablation_compare_fig.py:13: HERE = os.path.dirname(os.path.abspath(__file__))
+experiments\build_ablation_compare_fig.py:14: OUT = os.path.normpath(os.path.join(HERE, "..", "writing", "figures", "fig_ablation_compare.png"))
+experiments\build_ablation_compare_fig_en.py:4: 출력: ../writing/figures/en/fig5_ablation_compare.png
+experiments\build_ablation_compare_fig_en.py:13: HERE = os.path.dirname(os.path.abspath(__file__))
+experiments\build_ablation_compare_fig_en.py:14: OUT = os.path.normpath(os.path.join(HERE, "..", "writing", "figures", "en", "fig5_ablation_compare.png"))
+experiments\build_multirun_stats.py:12: HERE = os.path.dirname(os.path.abspath(__file__))
+experiments\build_table5_from_csv.py:10: HERE = os.path.dirname(os.path.abspath(__file__))
+experiments\generate_course_description.py:16: HERE = os.path.dirname(os.path.abspath(__file__))
+experiments\generate_course_description.py:17: OUT = os.path.join(HERE, "..", "writing", "course_descriptions.txt")
+experiments\measure_ablation.py:10: HERE = os.path.dirname(os.path.abspath(__file__))
+experiments\parse_course_request.py:17: HERE = os.path.dirname(os.path.abspath(__file__))
+experiments\parse_course_request.py:18: OUT = os.path.join(HERE, "..", "writing", "course_requests.txt")
+experiments\render_pretty_map.py:8: 실행: py render_pretty_map.py → writing/figures/map_topdong.png, map_ido.png
+experiments\render_pretty_map.py:14: HERE = os.path.dirname(os.path.abspath(__file__))
+experiments\render_pretty_map.py:15: FIG = os.path.normpath(os.path.join(HERE, "..", "writing", "figures"))
+experiments\render_road_map.py:9: 실행: py render_road_map.py → writing/figures/map_topdong.png, map_ido.png
+experiments\render_road_map.py:16: HERE = os.path.dirname(os.path.abspath(__file__))
+experiments\render_road_map.py:17: FIG = os.path.normpath(os.path.join(HERE, "..", "writing", "figures"))
+experiments\render_road_map.py:42: req = urllib.request.Request(url, headers={"User-Agent": "gildongmu-poster-mockup"})
+experiments\render_route_map.py:4: 실행: py render_route_map.py → writing/figures/map_<scenario>.png
+experiments\render_route_map.py:10: HERE = os.path.dirname(os.path.abspath(__file__))
+experiments\render_route_map.py:12: FIG = os.path.normpath(os.path.join(HERE, "..", "writing", "figures"))
+experiments\run5_candidates.py:4: 출력: ../writing/figures/team_run{1..5}.png, team_direction_run{1..5}.csv
+experiments\run5_candidates.py:13: HERE = os.path.dirname(os.path.abspath(__file__))
+experiments\run5_candidates.py:14: FIGDIR = os.path.normpath(os.path.join(HERE, "..", "writing", "figures"))
+experiments\team_direction_map.py:4: 출력: ../writing/figures/team_direction_routes.png
+experiments\team_direction_map.py:13: HERE = os.path.dirname(os.path.abspath(__file__))
+experiments\team_direction_map.py:15: OUT = os.path.normpath(os.path.join(HERE, "..", "writing", "figures", "team_direction_routes.png"))
+experiments\team_direction_map_en.py:4: 출력: ../writing/figures/en/fig4_routes.png
+experiments\team_direction_map_en.py:13: HERE = os.path.dirname(os.path.abspath(__file__))
+experiments\team_direction_map_en.py:15: OUT = os.path.normpath(os.path.join(HERE, "..", "writing", "figures", "en", "fig4_routes.png"))
+experiments\gildongmu-experiment\gradlew.bat:10: @rem Unless required by applicable law or agreed to in writing, software
+experiments\gildongmu-experiment\settings.gradle:1: rootProject.name = 'gildongmu-experiment'
+experiments\gildongmu-real\build_route_figures.py:3: 실행: py build_route_figures.py   (로컬 MySQL 필요: root/1234, db gildongmu)
+experiments\gildongmu-real\build_route_figures.py:4: 출력: ../writing/figures/fig4_compare.png, fig5_macro_routes.png
+experiments\gildongmu-real\build_route_figures.py:15: HERE = os.path.dirname(os.path.abspath(__file__))
+experiments\gildongmu-real\build_route_figures.py:17: FIGDIR = os.path.normpath(os.path.join(HERE, "..", "..", "writing", "figures"))
+experiments\gildongmu-real\gradlew.bat:10: @rem Unless required by applicable law or agreed to in writing, software
+experiments\gildongmu-real\settings.gradle:1: rootProject.name = 'gildongmu-experiment'
+experiments\loopv2_run\analyze_conditions.py:12: HERE = os.path.dirname(os.path.abspath(__file__)); EXP = os.path.dirname(HERE)
+experiments\loopv2_run\analyze_conditions.py:16: "B v2b+DIRECTION": ([os.path.join(EXP, "v2b_run", f"team_direction_v2b_run{i}.csv") for i in range(1, 6)],
+experiments\loopv2_run\analyze_conditions.py:17: [os.path.join(EXP, "v2b_run", f"measure_v2b_run{i}.log") for i in range(1, 6)]),
+experiments\loopv2_run\make_figures.py:2: """조건 A~F 비교 그림. 실행: py -X utf8 make_figures.py [회차=4]
+experiments\loopv2_run\make_figures.py:14: HERE = os.path.dirname(os.path.abspath(__file__)); EXP = os.path.dirname(HERE)
+experiments\loopv2_run\make_figures.py:20: ("B", "B 새 그래프(v2b)\n+ 기존 알고리즘", os.path.join(EXP, "v2b_run", f"team_direction_v2b_run{RUN}.csv"), "gildongmu_v2b"),
+experiments\loopv2_run\shape_metrics.py:9: HERE = os.path.dirname(os.path.abspath(__file__)); EXP = os.path.dirname(HERE)
+experiments\loopv2_run\shape_metrics.py:12: "B v2b+DIRECTION": [os.path.join(EXP, "v2b_run", f"team_direction_v2b_run{i}.csv") for i in range(1, 6)],
+experiments\osm_coverage\osm_coverage.py:3: 길 종류별 way 개수와 총 길이(km)를 Overpass의 length()로 집계. 실행: py -X utf8 osm_coverage.py
+experiments\osm_coverage\osm_coverage.py:61: json.dump(results, open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "osm_coverage.json"), "w", encoding="utf-8"),
+experiments\osm_coverage\osm_coverage_pbf.py:4: 실행: py -X utf8 osm_coverage_pbf.py
+experiments\osm_coverage\osm_coverage_pbf.py:11: HERE = os.path.dirname(os.path.abspath(__file__))
+experiments\osm_coverage\osm_coverage_pbf.py:12: # libosmium이 한글 경로를 못 열어, 영문 경로 사본을 우선 사용(원본: 논문/reading/references_data/osm/)
+experiments\osm_coverage\osm_coverage_pbf.py:13: PBF = os.environ.get("OSM_PBF") or os.path.join(HERE, "..", "..", "reading", "references_data", "osm", "south-korea-latest.osm.pbf")
+experiments\osm_coverage\osm_coverage_pbf.py:93: json.dump({c: {r: v for r, v in d.items()} for c, d in stat.items()}, open(os.path.join(HERE, "osm_coverage_pbf.json"), "w", encoding="utf-8"), ensure_ascii=False, indent
+experiments\osm_coverage\public_coverage.py:12: HERE = os.path.dirname(os.path.abspath(__file__))
+experiments\osm_coverage\road_tags.py:12: HERE = os.path.dirname(os.path.abspath(__file__))
+experiments\osm_coverage\tag_inventory.py:13: HERE = os.path.dirname(os.path.abspath(__file__))
+experiments\seoul_dev\make_data_viewer.py:10: HERE = os.path.dirname(os.path.abspath(__file__))
+experiments\seoul_dev\qgis\apply_rules.py:16: HERE = os.path.dirname(os.path.abspath(__file__))
+experiments\seoul_dev\qgis\build_qgis_project.py:12: HERE = os.path.dirname(os.path.abspath(__file__))
+experiments\seoul_dev\qgis\inspect_spots.py:5: HERE = os.path.dirname(os.path.abspath(__file__))
+experiments\team-latest-back\gradlew.bat:10: @rem Unless required by applicable law or agreed to in writing, software
+experiments\team-latest-back\collection\load_master_csv.py:23: CSV_PATH = os.path.join(os.path.dirname(__file__), "..", "jeju_gildongmu_final_master.csv")
+experiments\v1_run\start_server_v1.sh:3: # (team-latest-back/graph_cache.bin = 기존 그래프 캐시는 건드리지 않음). 설정 파일은 수정하지 않고 환경변수로 덮어씀.
+experiments\v1_run\start_server_v1.sh:11: exec "$JAVA_HOME/bin/java" -Xmx48g -jar ../team-latest-back/build/libs/gildongmu-0.0.1-SNAPSHOT.jar > server_v1.log 2>&1
+experiments\v2b_run\compare_v1_v2.py:3: 지표 정의는 ../build_multirun_stats.py와 동일(고도=gildongmu 최근접 도로점, 장애물 15m 고유 개수,
+experiments\v2b_run\compare_v1_v2.py:12: HERE = os.path.dirname(os.path.abspath(__file__))
+experiments\v2b_run\compare_v1_v2.py:76: V2 = [os.path.join(HERE, f"team_direction_v2b_run{i}.csv") for i in range(1, 6)]
+experiments\v2b_run\map_routes.py:4: 출력: ../writing/figures/en/fig4_routes.png
+experiments\v2b_run\map_routes.py:13: HERE = os.path.dirname(os.path.abspath(__file__))
+experiments\v2b_run\measure_ablation_v2.py:10: HERE = os.path.dirname(os.path.abspath(__file__))
+experiments\v2b_run\retrace_ratio.py:9: HERE = os.path.dirname(os.path.abspath(__file__)); EXP = os.path.dirname(HERE)
+experiments\v2b_run\retrace_ratio.py:34: ("v2b (새 그래프)", [os.path.join(HERE, f"team_direction_v2b_run{i}.csv") for i in range(1, 6)])]:
+experiments\v2b_run\run_v2_measure.sh:7: py -X utf8 measure_team_direction_v2.py > "measure_v2b_run$i.log" 2>&1
+experiments\v2b_run\run_v2_measure.sh:8: [ -f team_direction_routes.csv ] && mv team_direction_routes.csv "team_direction_v2b_run$i.csv"
+experiments\v2b_run\run_v2_measure.sh:9: tail -8 "measure_v2b_run$i.log"
+experiments\v2b_run\start_server_v2b.sh:3: # (team-latest-back/graph_cache.bin = 기존 그래프 캐시는 건드리지 않음). 설정 파일은 수정하지 않고 환경변수로 덮어씀.
+experiments\v2b_run\start_server_v2b.sh:11: exec "$JAVA_HOME/bin/java" -Xmx48g -jar ../team-latest-back/build/libs/gildongmu-0.0.1-SNAPSHOT.jar > server_v2b.log 2>&1
+experiments\v2_graph\build_v2_graph.py:15: 실행: py -X utf8 build_v2_graph.py   (출력: 같은 폴더 v2_stats.json, 콘솔 로그)
+experiments\v2_graph\build_v2_graph.py:27: HERE = os.path.dirname(os.path.abspath(__file__))
+experiments\v2_graph\build_v2b_graph.py:21: 실행: py -X utf8 build_v2_graph.py   (출력: 같은 폴더 v2_stats.json, 콘솔 로그)
+experiments\v2_graph\build_v2b_graph.py:34: HERE = os.path.dirname(os.path.abspath(__file__))
+experiments\v2_run\compare_v1_v2.py:3: 지표 정의는 ../build_multirun_stats.py와 동일(고도=gildongmu 최근접 도로점, 장애물 15m 고유 개수,
+experiments\v2_run\compare_v1_v2.py:12: HERE = os.path.dirname(os.path.abspath(__file__))
+experiments\v2_run\compare_v1_v2.py:76: V2 = [os.path.join(HERE, f"team_direction_v2_run{i}.csv") for i in range(1, 6)]
+experiments\v2_run\measure_ablation_v2.py:10: HERE = os.path.dirname(os.path.abspath(__file__))
+experiments\v2_run\run_v2_measure.sh:8: py -X utf8 measure_team_direction_v2.py > "measure_v2_run$i.log" 2>&1
+experiments\v2_run\run_v2_measure.sh:9: mv team_direction_routes.csv "team_direction_v2_run$i.csv"
+experiments\v2_run\run_v2_measure.sh:10: tail -8 "measure_v2_run$i.log"
+experiments\v2_run\start_server_v2.sh:3: # (team-latest-back/graph_cache.bin = 기존 그래프 캐시는 건드리지 않음). 설정 파일은 수정하지 않고 환경변수로 덮어씀.
+experiments\v2_run\start_server_v2.sh:11: exec "$JAVA_HOME/bin/java" -Xmx48g -jar ../team-latest-back/build/libs/gildongmu-0.0.1-SNAPSHOT.jar > server_v2.log 2>&1
+writing\build_concept_figs.py:18: HERE = os.path.dirname(os.path.abspath(__file__))
+writing\build_concept_figs.py:19: FIG = os.path.join(HERE, "figures")
+writing\build_docx.py:9: HERE = os.path.dirname(os.path.abspath(__file__))
+writing\build_docx.py:10: FIG = os.path.join(HERE, "..", "experiments", "gildongmu-experiment", "figure", "routes_이도-4km.png")
+writing\build_docx.py:11: OUT = os.path.join(HERE, "drafts", "논문v3.docx")
+writing\build_docx_paper.py:5: 출력: drafts/논문v4_학회양식.docx
+writing\build_docx_paper.py:15: HERE = os.path.dirname(os.path.abspath(__file__))
+writing\build_docx_paper.py:20: SRC = os.path.join(HERE, "drafts", "논문v4.md")
+writing\build_docx_paper.py:21: OUT = os.path.join(HERE, "drafts", "논문v4_학회양식.docx")
+writing\build_docx_v4.py:2: """논문 v4 (writing/drafts/논문v4.md) → Word(.docx) 변환. 실행: py build_docx_v4.py
+writing\build_docx_v4.py:14: HERE = os.path.dirname(os.path.abspath(__file__))
+writing\build_docx_v4.py:20: SRC = os.path.join(HERE, "drafts", "논문v4.md")
+writing\build_docx_v4.py:21: OUT = os.path.join(HERE, "drafts", "논문v4.docx")
+writing\build_easy_docx.py:8: HERE = os.path.dirname(os.path.abspath(__file__))
+writing\build_figures.py:2: """논문용 그림 생성: (1) 전체 시스템 구조, (2) DB ER 스키마. 실행: py build_figures.py"""
+writing\build_figures.py:12: HERE = os.path.dirname(os.path.abspath(__file__))
+writing\build_figures.py:13: FIGDIR = os.path.join(HERE, "figures")
+writing\build_figures_en.py:2: """학회지(JKADS) 투고용 영문 그림: Fig. 1 시스템 구조, Fig. 2 ER 스키마. 실행: py build_figures_en.py"""
+writing\build_figures_en.py:12: HERE = os.path.dirname(os.path.abspath(__file__))
+writing\build_figures_en.py:13: FIGDIR = os.path.join(HERE, "figures", "en")
+writing\build_greedy_fig.py:3: 출력: figures/fig_greedy_vs_beam.png
+writing\build_greedy_fig.py:12: HERE = os.path.dirname(os.path.abspath(__file__))
+writing\build_greedy_fig.py:13: OUT = os.path.join(HERE, "figures", "fig_greedy_vs_beam.png")
+writing\build_greedy_long_fig.py:3: 실행: py build_greedy_long_fig.py  → figures/fig_greedy_long.png
+writing\build_greedy_long_fig.py:11: HERE = os.path.dirname(os.path.abspath(__file__))
+writing\build_greedy_long_fig.py:12: OUT = os.path.join(HERE, "figures", "fig_greedy_long.png")
+writing\build_poster.py:3: 실행: py build_poster.py → drafts/길동무_poster.pptx
+writing\build_poster.py:12: HERE = os.path.dirname(os.path.abspath(__file__))
+writing\build_poster.py:13: FIG = os.path.join(HERE, "figures")
+writing\build_poster.py:14: OUT = os.path.join(HERE, "drafts", "길동무_poster.pptx")
+writing\build_pseudocode_explainer.py:4: 실행: py build_pseudocode_explainer.py → drafts/길동무_의사코드_설명.pptx
+writing\build_pseudocode_explainer.py:14: HERE = os.path.dirname(os.path.abspath(__file__))
+writing\build_pseudocode_explainer.py:15: ICON = os.path.join(HERE, "figures", "icons")
+writing\build_pseudocode_explainer.py:16: OUT = os.path.join(HERE, "drafts", "길동무_의사코드_설명.pptx")
+writing\build_report_ppt.py:3: 수치·동작은 experiments/team-latest-back 실제 소스 기준.
+writing\build_report_ppt.py:5: 실행: py build_report_ppt.py → drafts/길동무_중간보고.pptx
+writing\build_report_ppt.py:16: HERE = os.path.dirname(os.path.abspath(__file__))
+writing\build_report_ppt.py:17: FIG = os.path.join(HERE, "figures")
+writing\build_report_ppt.py:18: ICON = os.path.join(FIG, "icons")   # Tabler Icons(MIT) 변환본
+writing\build_report_ppt.py:19: OUT = os.path.join(HERE, "drafts", "길동무_중간보고.pptx")
+writing\build_script_pdf.py:14: HERE = os.path.dirname(os.path.abspath(__file__))
+writing\build_script_pdf.py:16: OUT = os.path.join(HERE, "drafts", "길동무_중간보고_대본.pdf")
+writing\build_script_ppt.py:17: HERE = os.path.dirname(os.path.abspath(__file__))
+writing\build_script_ppt.py:19: OUT = os.path.join(HERE, "drafts", "길동무_대본.pptx")
+writing\check_ppt_layout.py:50: def main(path='drafts/길동무_중간보고.pptx'):
+writing\drafts\정보기술학회\build_pdf.py:21: HERE = Path(__file__).resolve().parent
+writing\drafts\정보기술학회\build_pdf.py:127: ["pandoc", "-f", "markdown-implicit_figures-smart", "-t", "html5", "--mathml", "--wrap=preserve", "--columns=100000"],
+writing\drafts\정보기술학회\build_pdf.py:134: img = Image.open((SRC.parent / src).resolve())
+writing\mockup\ai_ui.html:69: <img class="map" src="../figures/map_topdong.png" alt="탑동 실제 경로 지도">
+writing\mockup\ai_ui.html:92: <img class="map" src="../figures/map_ido.png" alt="이도 실제 경로 지도">

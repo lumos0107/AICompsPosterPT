@@ -1,0 +1,242 @@
+From cc9a0294c007ea1e5e2ed7c05cd566321b2d66eb Mon Sep 17 00:00:00 2001
+From: lumos0107 <codinghallabong@gmail.com>
+Date: Tue, 10 Nov 2026 22:45:53 +0900
+Subject: [PATCH 09/11] =?UTF-8?q?LOOP=5FV2=20=EB=82=98=EA=B0=80=EB=8A=94?=
+ =?UTF-8?q?=20=EA=B5=AC=EA=B0=84=20=EB=AA=A8=EC=96=91=20=EA=B0=92=20?=
+ =?UTF-8?q?=EC=B6=94=EA=B0=80(=EC=A7=80=EA=B7=B8=EC=9E=AC=EA=B7=B8=20?=
+ =?UTF-8?q?=EB=B0=B0=EC=9C=A8,=20=EC=B8=A1=EB=A9=B4=20=EB=B6=84=EB=A6=AC,?=
+ =?UTF-8?q?=20=EA=B8=B0=EB=B3=B8=EA=B0=92=EC=9D=B4=EB=A9=B4=20=EA=B8=B0?=
+ =?UTF-8?q?=EC=A1=B4=EA=B3=BC=20=EA=B0=99=EC=9D=8C)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- RouteShape에 zigzagScale(기존 w9 배율), lateralWeight(빔 오프셋 쪽으로 축에서 벌어지기) 추가
+- buildCandidates에서 기본값이 아닐 때만 점수 보정
+- 요청 값 shapeZigzagScale, shapeLateral
+- 측면 판정 테스트 3개
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../gildongmu/algorithm/ScoreCalculator.java  |  6 ++--
+ .../algorithm/loopv2/LoopV2Engine.java        | 14 ++++++--
+ .../algorithm/loopv2/RouteShape.java          | 36 ++++++++++++++++---
+ .../dto/RouteRecommendRequest.java            |  3 ++
+ .../application/service/RouteService.java     |  4 ++-
+ .../algorithm/loopv2/ReturnPlannerTest.java   |  4 +--
+ .../algorithm/loopv2/RouteShapeTest.java      | 35 ++++++++++++++++++
+ 7 files changed, 90 insertions(+), 12 deletions(-)
+ create mode 100644 src/test/java/com/gildongmu/algorithm/loopv2/RouteShapeTest.java
+
+diff --git a/src/main/java/com/gildongmu/algorithm/ScoreCalculator.java b/src/main/java/com/gildongmu/algorithm/ScoreCalculator.java
+index a4116df..389351e 100644
+--- a/src/main/java/com/gildongmu/algorithm/ScoreCalculator.java
++++ b/src/main/java/com/gildongmu/algorithm/ScoreCalculator.java
+@@ -14,8 +14,8 @@ public class ScoreCalculator {
+     private static final double W6_FACILITY        = 0.5;
+     private static final double W7_ANCHOR          = 2.5;   // 앵커 방향 (양 페이즈 공통)
+     private static final double W_LATERAL          = 0.0;   // 구조적 분리로 대체
+-    private static final double W9_DIRECTION_EARLY = 3.0;
+-    private static final double W9_DIRECTION_LATE  = 2.0;
++    public static final double W9_DIRECTION_EARLY = 3.0;   // LOOP_V2 지그재그 배율 조정에서 참조(2026-11-10)
++    public static final double W9_DIRECTION_LATE  = 2.0;
+ 
+     private static final double OBSTACLE_RADIUS    = 10.0;
+     private static final double REUSE_RADIUS       = 50.0;
+@@ -164,7 +164,7 @@ public class ScoreCalculator {
+         return 1.0 / (1.0 + minDist);
+     }
+ 
+-    private static double calcDirectionPenalty(List<double[]> visitedPoints,
++    public static double calcDirectionPenalty(List<double[]> visitedPoints,
+                                                 double curLat, double curLng,
+                                                 double candLat, double candLng) {
+         int n = visitedPoints.size();
+diff --git a/src/main/java/com/gildongmu/algorithm/loopv2/LoopV2Engine.java b/src/main/java/com/gildongmu/algorithm/loopv2/LoopV2Engine.java
+index b360c77..09e45cb 100644
+--- a/src/main/java/com/gildongmu/algorithm/loopv2/LoopV2Engine.java
++++ b/src/main/java/com/gildongmu/algorithm/loopv2/LoopV2Engine.java
+@@ -100,7 +100,7 @@ public class LoopV2Engine {
+         int iter = 0;
+         while (beams.stream().anyMatch(b -> !b.isCompleted()) && iter++ < maxIter) {
+             List<BeamState> completed = beams.stream().filter(BeamState::isCompleted).collect(Collectors.toList());
+-            List<CandidateScore> all = buildCandidates(beams, context, strategy, slopeWeight, slopeThreshold, budgetRatio, pref);
++            List<CandidateScore> all = buildCandidates(beams, context, strategy, slopeWeight, slopeThreshold, budgetRatio, pref, shape);
+             List<BeamState> next = new ArrayList<>(completed);
+             if (!all.isEmpty()) {
+                 int remaining = Math.max(0, strategy.getBeamWidth(context) - completed.size());
+@@ -223,7 +223,8 @@ public class LoopV2Engine {
+     }
+ 
+     private List<CandidateScore> buildCandidates(List<BeamState> beams, BeamSearchContext context, BeamSearchStrategy strategy,
+-                                                 double slopeWeight, double slopeThreshold, double budgetRatio, Preference pref) {
++                                                 double slopeWeight, double slopeThreshold, double budgetRatio, Preference pref,
++                                                 RouteShape shape) {
+         List<CandidateScore> allCandidates = new ArrayList<>();
+         for (BeamState beam : beams) {
+             if (beam.isCompleted()) continue;
+@@ -305,6 +306,15 @@ public class LoopV2Engine {
+                 double adjustedScore = strategy.adjustScore(baseScore, beam, candidate, beams, context);
+                 // S(c|b) = A − λ_p·p(u,c)/ℓ0 − ... : p는 돌아오는 구간과 같은 비용(m), ℓ0로 나눠 점수 단위로 맞춘다.
+                 if (pref != null) adjustedScore -= pref.lambdaP() * prefCost(current, candidate, pref) / pref.stepMeters();
++                // 러닝 동선 모양(나가는 구간): 지그재그 벌점 배율 조정 + 축에서 빔 쪽으로 벌어지기(2026-11-10 밤). 기본값이면 건너뜀.
++                if (shape != null && shape.changesOutbound()) {
++                    double prog = (beam.getTraveledDistance() + segDist) / context.getTargetDistance();
++                    double w9 = prog < 0.7 ? ScoreCalculator.W9_DIRECTION_EARLY : ScoreCalculator.W9_DIRECTION_LATE;
++                    double zz = ScoreCalculator.calcDirectionPenalty(beam.getVisitedPoints(), curLat, curLng, candLat, candLng);
++                    adjustedScore += (1.0 - shape.zigzagScale()) * w9 * zz;
++                    adjustedScore += shape.lateralWeight() * RouteShape.lateral(context.getStartLat(), context.getStartLng(),
++                        context.getTargetLat(), context.getTargetLng(), candLat, candLng, beam.getDirectionOffset());
++                }
+                 allCandidates.add(new CandidateScore(beam, candidate, adjustedScore, segDist));
+             }
+         }
+diff --git a/src/main/java/com/gildongmu/algorithm/loopv2/RouteShape.java b/src/main/java/com/gildongmu/algorithm/loopv2/RouteShape.java
+index 6dae037..db7109f 100644
+--- a/src/main/java/com/gildongmu/algorithm/loopv2/RouteShape.java
++++ b/src/main/java/com/gildongmu/algorithm/loopv2/RouteShape.java
+@@ -1,18 +1,46 @@
+ /*
+  * RouteShape (정보기술학회 실험, 2026-11-10 밤 추가)
+- * - 러닝 동선 기준(Gemsa 외 2013: 모양·회전 복잡도, Hänsel 외 2025: 불필요한 회전 회피)을 돌아오는 구간 비용에 넣는 값.
++ * - 러닝 동선 기준(Gemsa 외 2013: 모양·회전 복잡도, Hänsel 외 2025: 불필요한 회전 회피)을 경로 비용·점수에 넣는 값.
++ * 돌아오는 구간(ReturnPlanner)
+  * - proxRadiusMeters, proxGamma: 선택한 외향 접두 구간에서 도로 거리 proxRadiusMeters 안의 간선(두 끝 모두 안)에
+  *   길이 × proxGamma 벌점. 바로 옆 평행 도로로 돌아와 고리가 가늘어지는 것을 막는다.
+  * - turnCostMeters, turnAngleDeg: 돌아오는 구간에서 진행 방위가 turnAngleDeg보다 크게 바뀔 때마다 turnCostMeters(m) 벌점.
+- * - 모두 0이면 기존 귀환과 같다(NONE).
++ * 나가는 구간(LoopV2Engine.buildCandidates)
++ * - zigzagScale: 기존 지그재그 벌점(w9)에 곱하는 배율. 1이면 기존과 같다.
++ * - lateralWeight: 출발점→안내점 축에서 빔의 방위 오프셋 쪽(+는 오른쪽, −는 왼쪽)으로 벌어질수록 주는 점수의 무게.
++ *   오프셋 0인 빔에는 주지 않는다. 0이면 기존과 같다.
++ * - 모두 기본값이면 기존과 같다(NONE).
+  */
+ package com.gildongmu.algorithm.loopv2;
+ 
+-public record RouteShape(double proxRadiusMeters, double proxGamma, double turnCostMeters, double turnAngleDeg) {
++public record RouteShape(double proxRadiusMeters, double proxGamma, double turnCostMeters, double turnAngleDeg,
++                         double zigzagScale, double lateralWeight) {
+ 
+-    public static final RouteShape NONE = new RouteShape(0.0, 0.0, 0.0, 45.0);
++    public static final RouteShape NONE = new RouteShape(0.0, 0.0, 0.0, 45.0, 1.0, 0.0);
++
++    /** 돌아오는 구간 값만 정할 때(나가는 구간은 기존과 같음). */
++    public static RouteShape returnOnly(double proxRadiusMeters, double proxGamma, double turnCostMeters, double turnAngleDeg) {
++        return new RouteShape(proxRadiusMeters, proxGamma, turnCostMeters, turnAngleDeg, 1.0, 0.0);
++    }
+ 
+     public boolean usesProximity() { return proxRadiusMeters > 0 && proxGamma > 0; }
+ 
+     public boolean usesTurns() { return turnCostMeters > 0; }
++
++    public boolean changesOutbound() { return zigzagScale != 1.0 || lateralWeight != 0.0; }
++
++    /**
++     * 측면 분리 점수: 출발점 s→안내점 g 축에 대해 후보 c가 빔 오프셋 쪽으로 벌어진 정도 sin(각) ∈ [−1, 1].
++     * 오프셋이 +(시계 방향, 오른쪽)이면 오른쪽일수록, −이면 왼쪽일수록 크다. 오프셋이 없거나 0이면 0.
++     */
++    public static double lateral(double sLat, double sLng, double gLat, double gLng, double cLat, double cLng, Double offset) {
++        if (offset == null || offset == 0.0) return 0.0;
++        double k = Math.cos(Math.toRadians(sLat));
++        double ax = (gLng - sLng) * k, ay = gLat - sLat;
++        double cx = (cLng - sLng) * k, cy = cLat - sLat;
++        double am = Math.hypot(ax, ay), cm = Math.hypot(cx, cy);
++        if (am == 0 || cm == 0) return 0.0;
++        double sinLeft = (ax * cy - ay * cx) / (am * cm);   // > 0 이면 축의 왼쪽
++        return offset > 0 ? -sinLeft : sinLeft;
++    }
+ }
+diff --git a/src/main/java/com/gildongmu/application/dto/RouteRecommendRequest.java b/src/main/java/com/gildongmu/application/dto/RouteRecommendRequest.java
+index 4043480..f9b6600 100644
+--- a/src/main/java/com/gildongmu/application/dto/RouteRecommendRequest.java
++++ b/src/main/java/com/gildongmu/application/dto/RouteRecommendRequest.java
+@@ -26,5 +26,8 @@ public class RouteRecommendRequest {
+     private Double shapeProxGamma;
+     private Double shapeTurnCost;
+     private Double shapeTurnAngle;
++    // 나가는 구간 모양(선택): 지그재그 벌점 배율(기본 1), 측면 분리 무게(기본 0).
++    private Double shapeZigzagScale;
++    private Double shapeLateral;
+ }
+ 
+diff --git a/src/main/java/com/gildongmu/application/service/RouteService.java b/src/main/java/com/gildongmu/application/service/RouteService.java
+index a205217..5fad0ae 100644
+--- a/src/main/java/com/gildongmu/application/service/RouteService.java
++++ b/src/main/java/com/gildongmu/application/service/RouteService.java
+@@ -53,7 +53,9 @@ public class RouteService {
+         double g = req.getShapeProxGamma() == null ? 0.0 : req.getShapeProxGamma();
+         double t = req.getShapeTurnCost() == null ? 0.0 : req.getShapeTurnCost();
+         double a = req.getShapeTurnAngle() == null ? 45.0 : req.getShapeTurnAngle();
+-        return new com.gildongmu.algorithm.loopv2.RouteShape(r, g, t, a);
++        double z = req.getShapeZigzagScale() == null ? 1.0 : req.getShapeZigzagScale();
++        double l = req.getShapeLateral() == null ? 0.0 : req.getShapeLateral();
++        return new com.gildongmu.algorithm.loopv2.RouteShape(r, g, t, a, z, l);
+     }
+ 
+     @Transactional
+diff --git a/src/test/java/com/gildongmu/algorithm/loopv2/ReturnPlannerTest.java b/src/test/java/com/gildongmu/algorithm/loopv2/ReturnPlannerTest.java
+index 9a16af3..007f3e0 100644
+--- a/src/test/java/com/gildongmu/algorithm/loopv2/ReturnPlannerTest.java
++++ b/src/test/java/com/gildongmu/algorithm/loopv2/ReturnPlannerTest.java
+@@ -153,7 +153,7 @@ class ReturnPlannerTest {
+          .edge(100, 101).edge(101, 102).edge(102, 103)
+          .edge(103, 203).edge(100, 200).edge(200, 201).edge(201, 202).edge(202, 203);
+         ReturnPlanner none = new ReturnPlanner(g, 5.0, 10_000.0);
+-        ReturnPlanner prox = new ReturnPlanner(g, 5.0, 10_000.0, new RouteShape(150.0, 3.0, 0.0, 45.0));
++        ReturnPlanner prox = new ReturnPlanner(g, 5.0, 10_000.0, RouteShape.returnOnly(150.0, 3.0, 0.0, 45.0));
+ 
+         ReturnPlanner.Result a = none.plan(List.of(0, 1, 2, 3), 800.0, 0.5, 3);
+         ReturnPlanner.Result b = prox.plan(List.of(0, 1, 2, 3), 1000.0, 0.10, 3);
+@@ -172,7 +172,7 @@ class ReturnPlannerTest {
+         g.edge(0, 1).edge(1, 2)
+          .edge(2, 102).edge(102, 202).edge(202, 201).edge(102, 101).edge(101, 201)
+          .edge(201, 200).edge(200, 100).edge(100, 0);
+-        ReturnPlanner turn = new ReturnPlanner(g, 5.0, 10_000.0, new RouteShape(0.0, 0.0, 60.0, 45.0));
++        ReturnPlanner turn = new ReturnPlanner(g, 5.0, 10_000.0, RouteShape.returnOnly(0.0, 0.0, 60.0, 45.0));
+         ReturnPlanner.Result r = turn.plan(List.of(0, 1, 2), 800.0, 0.10, 3);
+ 
+         assertNotNull(r);
+diff --git a/src/test/java/com/gildongmu/algorithm/loopv2/RouteShapeTest.java b/src/test/java/com/gildongmu/algorithm/loopv2/RouteShapeTest.java
+new file mode 100644
+index 0000000..115184d
+--- /dev/null
++++ b/src/test/java/com/gildongmu/algorithm/loopv2/RouteShapeTest.java
+@@ -0,0 +1,35 @@
++package com.gildongmu.algorithm.loopv2;
++
++import org.junit.jupiter.api.Test;
++
++import static org.junit.jupiter.api.Assertions.*;
++
++class RouteShapeTest {
++
++    // 출발점 (33.5, 126.5), 안내점은 정북쪽. 동쪽 후보 = 축의 오른쪽, 서쪽 후보 = 왼쪽.
++    private static final double S_LAT = 33.5, S_LNG = 126.5, G_LAT = 33.51, G_LNG = 126.5;
++
++    @Test
++    void 오른쪽_빔은_축의_오른쪽으로_벌어질수록_점수가_크다() {
++        double east = RouteShape.lateral(S_LAT, S_LNG, G_LAT, G_LNG, 33.505, 126.505, 23.0);
++        double west = RouteShape.lateral(S_LAT, S_LNG, G_LAT, G_LNG, 33.505, 126.495, 23.0);
++        assertTrue(east > 0);
++        assertTrue(west < 0);
++    }
++
++    @Test
++    void 왼쪽_빔은_축의_왼쪽으로_벌어질수록_점수가_크다() {
++        double east = RouteShape.lateral(S_LAT, S_LNG, G_LAT, G_LNG, 33.505, 126.505, -23.0);
++        double west = RouteShape.lateral(S_LAT, S_LNG, G_LAT, G_LNG, 33.505, 126.495, -23.0);
++        assertTrue(west > 0);
++        assertTrue(east < 0);
++    }
++
++    @Test
++    void 가운데_빔과_축_위_후보는_0이고_기본값은_나가는_구간을_바꾸지_않는다() {
++        assertEquals(0.0, RouteShape.lateral(S_LAT, S_LNG, G_LAT, G_LNG, 33.505, 126.505, 0.0));
++        assertEquals(0.0, RouteShape.lateral(S_LAT, S_LNG, G_LAT, G_LNG, 33.505, 126.5, 23.0), 1e-9);
++        assertFalse(RouteShape.NONE.changesOutbound());
++        assertFalse(RouteShape.returnOnly(100, 3, 60, 45).changesOutbound());
++    }
++}
+-- 
+2.50.1.windows.1
+

@@ -1,0 +1,48 @@
+- 2026 한국정보기술학회 추계 종합학술대회 논문집 -
+한글제목
+저자*, 저자**
+영문제목
+저자영문명*, 저자영문명**
+
+요  약
+
+초기의 SFF 방법들은 단일 프레임에서의 초점 측정으로 인해 정확한 깊이맵을 제공하지 못했다. 추후 연구
+를 통해 인공신경망을 이용한 SFF 방법이 개발되었고 이는 기존의 방법들 보다 더 좋은 성능을 보였다. 이 논
+문에서는 더 정확한 깊이맵 복원을 위해 인공신경망을 이용하여 초점형상 복원을 하는 방법을 제안하여 초점 
+형상 복원의 정확도를 향상시킨다. 
+
+Abstract
+
+The previous methods for shape from focus (SFF) do not generate accurate depth estimates because they acquire 
+the focus measure over the pixels in only single frame. In the further research, the SFF using artificial neural 
+network method is proposed, and it gives better performance than the traditional methods. For better performance, an 
+artificial neural network for shape from focus is proposed in this paper. The proposed method increase the 
+performance with low local minimization.
+
+Key words
+shape recovery, shape from focus, artificial nural ntwork, depth estimation, focus measure
+Ⅰ. 서  론
+
+비접촉 삼차원 형상복원의 한 분야인 Shape From 
+Focus (SFF) 방법은 물체의 초점을 다르게 하여 얻
+은 일련의 이차원 (2D) 영상에서 가장 선명한 픽셀
+을 찾음으로써 3D 형상을 획득하는 기술이다. SFF 
+기술은 알고리즘이 간결하기에 연산의 경제성 면에
+서 탁월한 장점을 갖고 있어 컴퓨터 비전 여러 분
+야에서 활발히 연구되어져 왔고 다양한 활용성을 
+가진다[1][2]. 초기의 SFF 방법[3][4]은 평면 프레임
+들의 각 픽셀에서 Focus Measure 값을 계산하며 이
+는 물체 형상의 부분 상수 근사화에 상응하게 된다. 
+그러나 이 방법은 복잡한 구조의 물체에서 부정확
+한 단점이 있다. 그래서 좀 더 정확한 depth 구하기 
+위해 Focused Image Surface (FIS)[3] 개념이 도입이 
+되었고, 이를 이용한 3차원 형상 복원 기술 
+(SFF.FIS)이 개발되었다. 추후에 다층구조의 피드포
+워드 인공신경망을 이용하여 신경망의 가중치를 업
+
+*소속, Email, **소속, Email(교신저자표시), ...
+
+※ 지원기관표기(사사표기)
+논문 양은 2페이지 제출권장 
+(최대 5페이지까지 가능)
+- 1 -
